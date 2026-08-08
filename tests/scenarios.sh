@@ -15,7 +15,8 @@ run() {
 rm -rf /opt/n8n; run "А: обычный домен, без прокси"            'n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
              run "А2: повторный запуск"                        'y\nn\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
 rm -rf /opt/n8n; run "Б: Cloudflare + socks5 + оранжевое"      'n8n.example.ru\ny\nsocks5://u:secret@1.2.3.4:1080\ny\ny\nfaketoken123\ny\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
-             run "Б2: повторный запуск"                        'y\nn\ny\nadmin@e.ru\nEurope/Moscow\nn\n'
+             # у сценария Б сохранён прокси: второй ответ - "оставить его"
+             run "Б2: повторный запуск"                        'y\ny\ny\nadmin@e.ru\nEurope/Moscow\nn\n'
 rm -rf /opt/n8n; run "В: обычный домен + http-прокси"          'n8n.mysite.ru\ny\nhttp://u:p@10.0.0.1:3128\ny\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
 rm -rf /opt/n8n; run "Г: Cloudflare без прокси, серое облако"  'n8n.example.ru\nn\ny\nfaketoken123\nn\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
 rm -rf /opt/n8n; run "Д: домен без поддомена"                  'mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
