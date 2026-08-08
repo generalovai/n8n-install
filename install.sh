@@ -120,6 +120,66 @@ dc() { docker compose --project-directory "$DIR" "$@"; }
 # сервера подменён или заблокирован DNS, обычный socks5 всё равно не сработает.
 proxy_for_curl() { printf '%s' "${1/#socks5:\/\//socks5h://}"; }
 
+# Провайдеры выдают адрес прокси в самых разных видах. Принимаем все частые
+# и приводим к одному: схема://логин:пароль@хост:порт
+#   http://логин:пароль@хост:порт   (уже правильный)
+#   хост:порт@логин:пароль          (частый у российских продавцов)
+#   логин:пароль@хост:порт
+#   хост:порт:логин:пароль
+#   логин:пароль:хост:порт
+#   хост:порт                       (без авторизации)
+is_hostport() { printf '%s' "$1" | grep -qE '^[A-Za-z0-9._-]+:[0-9]{1,5}$'; }
+
+normalize_proxy() {
+  local raw="$1" scheme="" rest="" left="" right="" cred="" host=""
+  raw="$(printf '%s' "$raw" | tr -d '[:space:]')"
+  case "$raw" in
+    http://*)    scheme=http;   rest="${raw#http://}" ;;
+    https://*)   scheme=http;   rest="${raw#https://}" ;;
+    socks5h://*) scheme=socks5; rest="${raw#socks5h://}" ;;
+    socks5://*)  scheme=socks5; rest="${raw#socks5://}" ;;
+    socks4://*)  return 1 ;;
+    socks://*)   scheme=socks5; rest="${raw#socks://}" ;;
+    *)           scheme="";     rest="$raw" ;;
+  esac
+
+  if [ "${rest#*@}" != "$rest" ]; then
+    # делим по последней собаке, а если не вышло - по первой
+    left="${rest%@*}"; right="${rest##*@}"
+    if   is_hostport "$right"; then host="$right"; cred="$left"
+    elif is_hostport "$left";  then host="$left";  cred="$right"
+    else
+      left="${rest%%@*}"; right="${rest#*@}"
+      if   is_hostport "$left";  then host="$left";  cred="$right"
+      elif is_hostport "$right"; then host="$right"; cred="$left"
+      else return 1
+      fi
+    fi
+  else
+    case "$(printf '%s' "$rest" | awk -F: '{print NF}')" in
+      2) is_hostport "$rest" || return 1; host="$rest"; cred="" ;;
+      4) local a b c d
+         a="${rest%%:*}"; rest="${rest#*:}"
+         b="${rest%%:*}"; rest="${rest#*:}"
+         c="${rest%%:*}"; d="${rest#*:}"
+         if   is_hostport "$a:$b"; then host="$a:$b"; cred="$c:$d"
+         elif is_hostport "$c:$d"; then host="$c:$d"; cred="$a:$b"
+         else return 1
+         fi ;;
+      *) return 1 ;;
+    esac
+  fi
+
+  [ -n "$scheme" ] || scheme=http
+  if [ -n "$cred" ]; then printf '%s://%s@%s' "$scheme" "$cred" "$host"
+  else printf '%s://%s' "$scheme" "$host"; fi
+}
+
+# Показать адрес без пароля - чтобы человек убедился, что мы поняли правильно
+mask_proxy() {
+  printf '%s' "$1" | sed -E 's|(://[^:@]+:)[^@]*@|\1*****@|'
+}
+
 # Отправка сообщения в Telegram. Никогда не роняет вызвавший её код:
 # уведомление - вещь полезная, но не критичная.
 tg_send() {
@@ -281,11 +341,19 @@ if [ "$NEED_PROXY_Q" = "да" ]; then
 TXT
   if ask_yes "Настроить прокси?" "н"; then
     while :; do
-      ask PROXY_URL "Адрес прокси"
-      case "$PROXY_URL" in
-        http://*|https://*|socks5://*|socks5h://*) ;;
-        *) warn "Адрес должен начинаться с http:// или socks5://"; continue ;;
-      esac
+      ask PROXY_RAW "Адрес прокси"
+      if PROXY_URL="$(normalize_proxy "$PROXY_RAW")"; then
+        say "  Понял так: $B$(mask_proxy "$PROXY_URL")$R"
+        ask_yes "  Всё верно?" "д" || { warn "Хорошо, введите заново."; continue; }
+      else
+        warn "Не разобрал этот адрес."
+        say  "  Подойдёт любой из привычных видов, например:"
+        say  "    http://логин:пароль@203.0.113.10:10000"
+        say  "    203.0.113.10:10000@логин:пароль"
+        say  "    203.0.113.10:10000:логин:пароль"
+        say  "  Если прокси без пароля - просто  203.0.113.10:10000"
+        continue
+      fi
       case "$PROXY_URL" in
         socks5*)
           _cred="${PROXY_URL#*://}"

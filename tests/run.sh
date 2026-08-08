@@ -24,14 +24,18 @@ docker run --rm -e LC_ALL=C.UTF-8 -v "$TMP:/mnt" koalaman/shellcheck:stable -S w
 echo "  замечаний нет"
 
 echo
-echo "== 3. Сценарии установки в Ubuntu =="
+echo "== 3. Разбор адреса прокси =="
+bash "$ROOT/tests/proxy-formats.sh"
+
+echo
+echo "== 4. Сценарии установки в Ubuntu =="
 docker run --rm \
   -v "$ROOT/tests:/tests:ro" \
   -v "$ROOT/install.sh:/work/install.sh:ro" \
   ubuntu:22.04 bash /tests/scenarios.sh
 
 echo
-echo "== 4. Проверка docker-compose.yml, который генерирует установщик =="
+echo "== 5. Проверка docker-compose.yml, который генерирует установщик =="
 bash "$ROOT/tests/compose-check.sh"
 
 rm -rf "$TMP"
