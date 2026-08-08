@@ -1,0 +1,799 @@
+{
+  "id": "wfUzlyVRabote1",
+  "name": "[Добро пожаловать] Узлы в работе — отчёт по заказам",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "d2000000-0000-4000-8000-000000000001",
+      "name": "Расписание (раз в неделю)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -896,
+        480
+      ],
+      "notes": "Запускается сам каждый понедельник в 9:00."
+    },
+    {
+      "parameters": {
+        "formTitle": "Отчёт по заказам",
+        "formDescription": "Нажми кнопку — и отчёт придёт в Telegram.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Кто запрашивает отчёт"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false,
+          "buttonLabel": "Сформировать отчёт",
+          "path": "demo-report"
+        }
+      },
+      "id": "d2000000-0000-4000-8000-000000000002",
+      "name": "Форма запуска",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -896,
+        752
+      ],
+      "webhookId": "fb2ace61-0870-4c55-b6ef-a8fec846f911",
+      "notes": "Второй способ запуска — вручную через форму."
+    },
+    {
+      "parameters": {
+        "jsCode": "// В реальной автоматизации здесь был бы узел CRM / таблицы / HTTP Request.\n// Для обучения — просто список заказов.\nreturn [\n  { json: { name: 'Анна',  city: 'Москва', amount: 5200,  status: 'оплачен', date: '2026-07-14' } },\n  { json: { name: 'Борис',  city: 'Казань', amount: 800,   status: 'новый',   date: '2026-07-15' } },\n  { json: { name: 'Вика',   city: 'Москва', amount: 12000, status: 'оплачен', date: '2026-07-16' } },\n  { json: { name: 'Глеб',   city: 'Сочи',   amount: 300,   status: 'отменён', date: '2026-07-16' } },\n  { json: { name: 'Дина',   city: 'Казань', amount: 2400,  status: 'оплачен', date: '2026-07-17' } },\n  { json: { name: 'Егор',   city: 'Москва', amount: 950,   status: 'новый',   date: '2026-07-18' } }\n];"
+      },
+      "id": "d2000000-0000-4000-8000-000000000003",
+      "name": "Тестовые данные",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        624
+      ],
+      "notes": "Источник данных. 6 заказов."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "amount_with_vat",
+              "type": "number",
+              "value": "={{ Math.round($json.amount * 1.2) }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-000000000004",
+      "name": "Считаем НДС",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        624
+      ],
+      "notes": "Edit Fields: добавляет поле с НДС к каждому заказу."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c1",
+                    "leftValue": "={{ $json.city }}",
+                    "rightValue": "Москва",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Москва"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c2",
+                    "leftValue": "={{ $json.city }}",
+                    "rightValue": "Казань",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Казань"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Другие города"
+        }
+      },
+      "id": "d2000000-0000-4000-8000-000000000005",
+      "name": "Разводим по городам",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        352,
+        624
+      ],
+      "notes": "Switch: 3 выхода. Запасной выход включён — иначе Сочи потерялся бы."
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "d2000000-0000-4000-8000-000000000006",
+      "name": "Собираем обратно",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        768,
+        624
+      ],
+      "notes": "Merge: три ветки городов снова в один поток. numberInputs = 3."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "оплачен",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-000000000007",
+      "name": "Только оплаченные",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1184,
+        624
+      ],
+      "notes": "Filter: из 6 заказов останется 3 оплаченных."
+    },
+    {
+      "parameters": {
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "amount",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-000000000008",
+      "name": "Сортируем по сумме",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        624
+      ],
+      "notes": "Sort: самые дорогие заказы вверх."
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "id": "d2000000-0000-4000-8000-000000000009",
+      "name": "Берём топ-3",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        2032,
+        624
+      ],
+      "notes": "Limit: после сортировки это и есть ТОП-3."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "t1",
+              "name": "name",
+              "type": "string",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "id": "t2",
+              "name": "city",
+              "type": "string",
+              "value": "={{ $json.city }}"
+            },
+            {
+              "id": "t3",
+              "name": "amount",
+              "type": "number",
+              "value": "={{ $json.amount }}"
+            },
+            {
+              "id": "t4",
+              "name": "amount_with_vat",
+              "type": "number",
+              "value": "={{ $json.amount_with_vat }}"
+            },
+            {
+              "id": "t5",
+              "name": "status",
+              "type": "string",
+              "value": "={{ $json.status }}"
+            },
+            {
+              "id": "t6",
+              "name": "date",
+              "type": "string",
+              "value": "={{ $json.date }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-00000000000a",
+      "name": "Готовим строки для таблицы",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2448,
+        624
+      ],
+      "notes": "Оставляем РОВНО те поля, что есть в таблице — тогда колонки сопоставятся сами."
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GfFTfUFzn8kUhWzJ",
+          "cachedResultName": "Демо — отчёт по заказам"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-00000000000b",
+      "name": "Запись в таблицу n8n",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2864,
+        624
+      ],
+      "notes": "Сохраняет топ-3 в таблицу внутри n8n."
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "name"
+            },
+            {
+              "fieldToAggregate": "amount"
+            },
+            {
+              "fieldToAggregate": "city"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-00000000000c",
+      "name": "Сводим в один список",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3280,
+        624
+      ],
+      "notes": "Aggregate: 3 строки → 1 со списками. Чтобы отправить ОДНО сообщение, а не три."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Собираем текст отчёта из списков, которые собрал Aggregate.\n// Разметка HTML — её понимает Telegram.\nconst names = $json.name || [];\nconst amounts = $json.amount || [];\nconst cities = $json.city || [];\n\nfunction esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\n\nconst lines = names.map((n, i) => (i + 1) + '. <b>' + esc(n) + '</b> — ' + (amounts[i] || 0) + ' ₽ (' + esc(cities[i]) + ')');\nconst total = amounts.reduce((a, b) => a + (b || 0), 0);\n\nconst text = '<b>📊 Отчёт по заказам</b>\\n' +\n  'Дата: ' + DateTime.now().toFormat('yyyy-MM-dd') + '\\n\\n' +\n  'Топ-' + names.length + ' оплаченных заказов:\\n' + lines.join('\\n') + '\\n\\n' +\n  'Итого: <b>' + total + ' ₽</b>';\n\nreturn [{ json: { message: text, count: names.length } }];"
+      },
+      "id": "d2000000-0000-4000-8000-00000000000d",
+      "name": "Собираем сообщение",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3712,
+        624
+      ],
+      "notes": "Формирует готовый текст сообщения."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if1",
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-00000000000e",
+      "name": "Есть что отправлять?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4128,
+        624
+      ],
+      "notes": "IF: если заказов ноль — не спамим пустым отчётом."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "d2000000-0000-4000-8000-00000000000f",
+      "name": "По одному сообщению",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        4480,
+        576
+      ],
+      "notes": "Loop: выход 0 = done, выход 1 = loop (на Telegram)."
+    },
+    {
+      "parameters": {
+        "chatId": "ВСТАВЬ_СВОЙ_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "d2000000-0000-4000-8000-000000000010",
+      "name": "Отправка в Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4736,
+        608
+      ],
+      "webhookId": "8a99d3e7-630f-45c5-a5a3-c5da1b996e55",
+      "notes": "Впиши свой Chat ID и подключи бота."
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "d2000000-0000-4000-8000-000000000011",
+      "name": "Пауза 2 сек",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5008,
+        656
+      ],
+      "webhookId": "c172e905-d855-485d-991c-1d26a074a7f2",
+      "notes": "Wait: чтобы не упереться в лимиты Telegram."
+    },
+    {
+      "parameters": {},
+      "id": "d2000000-0000-4000-8000-000000000012",
+      "name": "Нечего отправлять",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4464,
+        864
+      ],
+      "notes": "NoOp: тихо завершаем, если заказов нет."
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 Что делает эта автоматизация\nБерёт заказы → считает НДС → разводит по городам и собирает обратно → оставляет оплаченные → сортирует → берёт топ-3 → пишет в таблицу → собирает отчёт → шлёт в Telegram.\n\nЭто те же узлы, что в воркфлоу «1. Витрина узлов», но уже в бою.\n\n### ▶️ Два способа запуска\n• **Расписание** — сам по понедельникам\n• **Форма** — когда нужно прямо сейчас",
+        "height": 844,
+        "width": 700,
+        "color": 4
+      },
+      "id": "e2000000-0000-4000-8000-0000000000a1",
+      "name": "Заметка старт",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ✏️ Шаг 1. Edit Fields\nСчитает сумму с НДС и добавляет её колонкой.\n\nСтрок как было 6, так и осталось — просто у каждой появилось новое поле.",
+        "height": 420,
+        "width": 400,
+        "color": 3
+      },
+      "id": "e2000000-0000-4000-8000-0000000000a2",
+      "name": "Заметка подготовка",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔀 Шаг 2. Switch + Merge — разветвить и собрать\n**Switch** разводит заказы по городам: Москва (3) / Казань (2) / Другие (1 — Сочи).\n**Merge** собирает три ветки обратно в один поток.\n\n⚠️ Две ловушки сразу:\n• у Switch надо включить запасной выход, иначе Сочи пропадёт\n• у Merge надо поставить 3 входа (по умолчанию 2!)\n\n💡 Зачем Merge вообще: без него следующие узлы выполнились бы ПО РАЗУ НА КАЖДУЮ ветку.",
+        "height": 560,
+        "width": 800,
+        "color": 3
+      },
+      "id": "e2000000-0000-4000-8000-0000000000a3",
+      "name": "Заметка ветвление",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔍 Шаг 3. Filter → Sort → Limit — классическая связка «ТОП-N»\n**Filter** — выкидывает неоплаченные: было 6 → стало 3.\n**Sort** — ставит самые дорогие вверх.\n**Limit** — оставляет первые 3.\n\nПорядок важен: сначала сортируем, потом режем. Если наоборот — получишь случайные 3, а не лучшие.",
+        "height": 560,
+        "width": 1180,
+        "color": 3
+      },
+      "id": "e2000000-0000-4000-8000-0000000000a4",
+      "name": "Заметка отбор",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🗃️ Шаг 4. Сохраняем в таблицу\n**Edit Fields** оставляет РОВНО те поля, что есть в таблице.\n**Data Table** пишет строки — колонки сопоставляются автоматически по именам.\n\n⚠️ Имена колонок Data Table — только латиницей, кириллица и пробелы запрещены.",
+        "height": 560,
+        "width": 800,
+        "color": 3
+      },
+      "id": "e2000000-0000-4000-8000-0000000000a5",
+      "name": "Заметка сохранение",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2352,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 📥 Шаг 5. Aggregate + Code — готовим одно сообщение\n**Aggregate** склеивает 3 строки в 1 со списками.\nБез него Telegram прислал бы **три отдельных сообщения** вместо одного отчёта.\n\n**Code** собирает из списков текст с HTML-разметкой.",
+        "height": 560,
+        "width": 800,
+        "color": 3
+      },
+      "id": "e2000000-0000-4000-8000-0000000000a6",
+      "name": "Заметка сводка",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3184,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 📨 Шаг 6. IF + Loop + Wait — аккуратная отправка\n**IF** проверяет, есть ли что отправлять. Пустые отчёты — это спам.\n• верхний выход (true) → отправляем\n• нижний (false) → тихо завершаем через No Operation\n\n**Loop + Wait** — шлёт по одному с паузой 2 сек. Сейчас сообщение одно, но если их станет много — не получишь бан за частые запросы.\n\n🔑 Впиши свой Chat ID и подключи бота в узле Telegram.",
+        "height": 780,
+        "width": 1180,
+        "color": 3
+      },
+      "id": "e2000000-0000-4000-8000-0000000000a7",
+      "name": "Заметка доставка",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4032,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Расписание (раз в неделю)": {
+      "main": [
+        [
+          {
+            "node": "Тестовые данные",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Форма запуска": {
+      "main": [
+        [
+          {
+            "node": "Тестовые данные",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Тестовые данные": {
+      "main": [
+        [
+          {
+            "node": "Считаем НДС",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Считаем НДС": {
+      "main": [
+        [
+          {
+            "node": "Разводим по городам",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разводим по городам": {
+      "main": [
+        [
+          {
+            "node": "Собираем обратно",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Собираем обратно",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Собираем обратно",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Собираем обратно": {
+      "main": [
+        [
+          {
+            "node": "Только оплаченные",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Только оплаченные": {
+      "main": [
+        [
+          {
+            "node": "Сортируем по сумме",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сортируем по сумме": {
+      "main": [
+        [
+          {
+            "node": "Берём топ-3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Берём топ-3": {
+      "main": [
+        [
+          {
+            "node": "Готовим строки для таблицы",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Готовим строки для таблицы": {
+      "main": [
+        [
+          {
+            "node": "Запись в таблицу n8n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Запись в таблицу n8n": {
+      "main": [
+        [
+          {
+            "node": "Сводим в один список",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сводим в один список": {
+      "main": [
+        [
+          {
+            "node": "Собираем сообщение",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Собираем сообщение": {
+      "main": [
+        [
+          {
+            "node": "Есть что отправлять?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Есть что отправлять?": {
+      "main": [
+        [
+          {
+            "node": "По одному сообщению",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Нечего отправлять",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "По одному сообщению": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Отправка в Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Отправка в Telegram": {
+      "main": [
+        [
+          {
+            "node": "Пауза 2 сек",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Пауза 2 сек": {
+      "main": [
+        [
+          {
+            "node": "По одному сообщению",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Europe/Moscow",
+    "saveManualExecutions": true
+  }
+}

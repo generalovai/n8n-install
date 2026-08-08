@@ -1574,7 +1574,7 @@ chmod +x "$DIR/autoupdate.sh"
 # создаст учётную запись владельца: до этого момента n8n не к кому их привязать.
 mkdir -p "$DIR/workflows"
 WF_BASE="https://raw.githubusercontent.com/generalovai/n8n-install/main/workflows"
-WF_LIST="01-proverka-servera.json"   # сюда добавляются новые готовые воркфлоу
+WF_LIST="01-proverka-servera.json 02-vitrina-uzlov.json 03-uzly-v-rabote.json"
 # shellcheck disable=SC2086
 for wf in $WF_LIST; do
   pcurl -fsSL --max-time 60 "$WF_BASE/$wf" -o "$DIR/workflows/$wf" 2>/dev/null \
@@ -1622,7 +1622,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 */5 * * * * root /opt/n8n/import-workflows.sh >/dev/null 2>&1
 EOF
 chmod 644 /etc/cron.d/n8n-workflows
-ok "Готовые воркфлоу появятся сразу после создания учётной записи"
+ok "Три готовых воркфлоу появятся сразу после создания учётной записи"
 
 # --- notify.sh ---------------------------------------------------------------
 cat > "$DIR/notify.sh" <<'EOF'

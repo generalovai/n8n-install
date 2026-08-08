@@ -1,0 +1,760 @@
+{
+  "id": "wfVitrinaUzlov1",
+  "name": "[Добро пожаловать] Витрина узлов n8n",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b1000000-0000-4000-8000-000000000001",
+      "name": "Запуск вручную",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        1552
+      ],
+      "notes": "Самый простой триггер: кнопка Test workflow."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "b1000000-0000-4000-8000-000000000002",
+      "name": "Расписание (пример)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -560,
+        1808
+      ],
+      "notes": "Запуск по времени. Здесь — каждый день в 9:00."
+    },
+    {
+      "parameters": {
+        "formTitle": "Пример формы",
+        "formDescription": "Так выглядит запуск через форму.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Имя",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Город"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false,
+          "buttonLabel": "Отправить",
+          "path": "demo-form"
+        }
+      },
+      "id": "b1000000-0000-4000-8000-000000000003",
+      "name": "Форма (пример)",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -560,
+        2064
+      ],
+      "webhookId": "dc9da46c-6561-44c0-930b-1539cf2332fe",
+      "notes": "Запуск через веб-форму. Ссылка — внутри ноды."
+    },
+    {
+      "parameters": {
+        "jsCode": "// 6 тестовых заказов. На них будем тренироваться.\n// Можно смело менять значения — это просто пример.\nreturn [\n  { json: { name: 'Анна',  city: 'Москва', amount: 5200,  status: 'оплачен', date: '2026-07-14', tags: ['vip', 'повтор'] } },\n  { json: { name: 'Борис',  city: 'Казань', amount: 800,   status: 'новый',   date: '2026-07-15', tags: ['новичок'] } },\n  { json: { name: 'Вика',   city: 'Москва', amount: 12000, status: 'оплачен', date: '2026-07-16', tags: ['vip'] } },\n  { json: { name: 'Глеб',   city: 'Сочи',   amount: 300,   status: 'отменён', date: '2026-07-16', tags: [] } },\n  { json: { name: 'Дина',   city: 'Казань', amount: 2400,  status: 'оплачен', date: '2026-07-17', tags: ['повтор'] } },\n  { json: { name: 'Егор',   city: 'Москва', amount: 950,   status: 'новый',   date: '2026-07-18', tags: ['новичок', 'vip'] } }\n];"
+      },
+      "id": "b1000000-0000-4000-8000-000000000010",
+      "name": "Тестовые данные",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        1808
+      ],
+      "notes": "Исходные данные для всех примеров справа."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "amount_with_vat",
+              "type": "number",
+              "value": "={{ $json.amount * 1.2 }}"
+            },
+            {
+              "id": "e2",
+              "name": "label",
+              "type": "string",
+              "value": "={{ $json.name }} — {{ $json.city }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000101",
+      "name": "Edit Fields — меняем поля",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        352,
+        144
+      ],
+      "notes": "Добавляет два новых поля к каждому заказу."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.amount }}",
+              "rightValue": 1000,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000102",
+      "name": "Filter — только нужное",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        352,
+        384
+      ],
+      "notes": "Оставляет только заказы дороже 1000."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "оплачен",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000103",
+      "name": "IF — развилка да/нет",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        352,
+        608
+      ],
+      "notes": "Два выхода: true (оплачен) и false (всё остальное)."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw1",
+                    "leftValue": "={{ $json.city }}",
+                    "rightValue": "Москва",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Москва"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw2",
+                    "leftValue": "={{ $json.city }}",
+                    "rightValue": "Казань",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Казань"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Другие города"
+        }
+      },
+      "id": "b1000000-0000-4000-8000-000000000104",
+      "name": "Switch — много путей",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        352,
+        832
+      ],
+      "notes": "Три выхода: Москва, Казань, Другие города."
+    },
+    {
+      "parameters": {
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "amount",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000105",
+      "name": "Sort — сортировка",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        352,
+        1120
+      ],
+      "notes": "Сортирует заказы по сумме по убыванию."
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "id": "b1000000-0000-4000-8000-000000000106",
+      "name": "Limit — только первые",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        352,
+        1392
+      ],
+      "notes": "Оставляет только первые 3 записи."
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "name"
+            },
+            {
+              "fieldToAggregate": "amount"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000107",
+      "name": "Aggregate — в один список",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        352,
+        1632
+      ],
+      "notes": "Из 6 строк делает 1 со списками имён и сумм."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "tags",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000108",
+      "name": "Split Out — список в строки",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        352,
+        1888
+      ],
+      "notes": "Обратное к Aggregate: массив tags раскладывает по строкам."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code нужен, когда готовые узлы не покрывают задачу.\n// Здесь: считаем итоги по всем заказам сразу.\nconst items = $input.all();\nconst sum = items.reduce((acc, it) => acc + (it.json.amount || 0), 0);\nconst paid = items.filter(it => it.json.status === 'оплачен').length;\n\nreturn [{ json: {\n  всего_заказов: items.length,\n  оплачено: paid,\n  общая_сумма: sum,\n  средний_чек: Math.round(sum / items.length)\n} }];"
+      },
+      "id": "b1000000-0000-4000-8000-000000000109",
+      "name": "Code — своя логика",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        2176
+      ],
+      "notes": "Считает итоги: всего, оплачено, сумма, средний чек."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000110",
+      "name": "Loop Over Items — по одному",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        352,
+        2448
+      ],
+      "notes": "ВАЖНО: выход 0 = done (один раз в конце), выход 1 = loop (каждая порция)."
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "b1000000-0000-4000-8000-000000000111",
+      "name": "Wait — пауза",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        352,
+        2752
+      ],
+      "webhookId": "7c5f4f9a-7009-478f-a71a-a8d355642f7f",
+      "notes": "Пауза 2 секунды. Нужна против лимитов API."
+    },
+    {
+      "parameters": {},
+      "id": "b1000000-0000-4000-8000-000000000112",
+      "name": "No Operation — заглушка",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        352,
+        3008
+      ],
+      "notes": "Ничего не делает. Удобно как точка сборки веток."
+    },
+    {
+      "parameters": {},
+      "id": "b1000000-0000-4000-8000-000000000113",
+      "name": "Merge — объединяем потоки",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1648,
+        1312
+      ],
+      "notes": "Склеивает два потока: все 6 заказов + отфильтрованные."
+    },
+    {
+      "parameters": {
+        "content": "## ▶️ ТРИГГЕРЫ — с чего всё начинается\nТриггер — это узел, который **запускает** автоматизацию. Без него ничего не стартует.\n\n• **Запуск вручную** — кнопка Test workflow. Для проверок.\n• **Расписание** — сам срабатывает по времени.\n• **Форма** — человек заполняет веб-форму.\n\nУ одного воркфлоу может быть несколько триггеров — срабатывает тот, через который запустили.",
+        "height": 1060,
+        "width": 420,
+        "color": 4
+      },
+      "id": "c1000000-0000-4000-8000-0000000000a1",
+      "name": "Заметка триггеры",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 📦 Тестовые данные\n6 выдуманных заказов: имя, город, сумма, статус, дата, теги.\n\nОт них веером идут все примеры справа — каждый узел работает с одними и теми же данными.",
+        "height": 360,
+        "width": 340,
+        "color": 5
+      },
+      "id": "c1000000-0000-4000-8000-0000000000a2",
+      "name": "Заметка данные",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ✏️ Edit Fields (Set)\nСамый частый узел. **Добавляет, переименовывает и считает поля.**\nЗдесь: считает сумму с НДС и склеивает «имя — город».\nКол-во строк НЕ меняется: 6 → 6.",
+        "height": 212,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b1",
+      "name": "Заметка set",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔍 Filter\n**Отсеивает лишние строки.** Один выход: прошли только те, кто подходит.\nЗдесь: сумма > 1000 → из 6 останется 3.\nОтличие от IF: Filter просто выбрасывает, IF — делит на две ветки.",
+        "height": 180,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b2",
+      "name": "Заметка filter",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ↔️ IF\n**Развилка на два пути.** Верхний выход — true, нижний — false.\nЗдесь: статус = «оплачен».\nНичего не теряется — все строки уйдут в одну из двух веток.",
+        "height": 212,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b3",
+      "name": "Заметка if",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔀 Switch\n**Как IF, но путей много.** Здесь 3 выхода: Москва / Казань / Другие города.\n\n⚠️ Главная ловушка: если НЕ включить запасной выход (Fallback Output), строки без совпадения просто исчезнут. Здесь он включён.",
+        "height": 244,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b4",
+      "name": "Заметка switch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ⬆️ Sort\n**Меняет порядок строк.** Здесь: по сумме, от большей к меньшей.\nКол-во строк не меняется, меняется только порядок.\nЧасто ставят перед Limit — чтобы взять ТОП-N.",
+        "height": 244,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b5",
+      "name": "Заметка sort",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ✂️ Limit\n**Оставляет только N строк.** Здесь: первые 3.\nМожно брать с начала или с конца.\nСвязка Sort + Limit =  ТОП-3 заказа.",
+        "height": 196,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b6",
+      "name": "Заметка limit",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 📥 Aggregate\n**Много строк → одна.** Собирает значения поля в список.\nЗдесь: 6 заказов → 1 строка со списком имён и списком сумм.\nУдобно перед отправкой одного сообщения со сводкой.",
+        "height": 260,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b7",
+      "name": "Заметка aggregate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        1552
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 📤 Split Out\n**Одна строка со списком → много строк.** Точная противоположность Aggregate.\nЗдесь: массив tags раскладывается — каждый тег в свою строку.",
+        "height": 212,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b8",
+      "name": "Заметка splitout",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        1840
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🧑‍💻 Code\n**Своя логика на JavaScript**, когда готовых узлов не хватает.\nЗдесь: считает итоги по всем заказам.\n\n💡 Совет: не беги сразу в Code. Сначала посмотри, нет ли готового узла — так понятнее и надёжнее.",
+        "height": 260,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000b9",
+      "name": "Заметка code",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔁 Loop Over Items\n**Обрабатывает строки порциями.** Здесь по 1 штуке.\n\n⚠️ Главная ловушка новичков — выходы перепутаны местами:\n• верхний (done) — срабатывает ОДИН раз в самом конце\n• нижний (loop) — срабатывает на каждую порцию",
+        "height": 308,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000c1",
+      "name": "Заметка loop",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        2368
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ⏱️ Wait\n**Ставит паузу.** Здесь 2 секунды.\nЗачем: чтобы не упереться в лимиты сервисов (Telegram, API) при частых запросах.\nЧасто ставят внутрь цикла.",
+        "height": 212,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000c2",
+      "name": "Заметка wait",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        2704
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ⏺️ No Operation\n**Ничего не делает** — просто пропускает данные дальше.\nЗачем нужен: как аккуратная точка сборки веток или заглушка в недоделанной ветке.",
+        "height": 196,
+        "width": 400,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000c3",
+      "name": "Заметка noop",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        2960
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔗 Merge\n**Соединяет несколько потоков в один.** Здесь: все 6 заказов + отфильтрованные 3.\n\n⚠️ Ловушка: по умолчанию входов только ДВА. Если источников больше — увеличь Number of Inputs, иначе лишние молча пропадут.\n\n💡 Merge также работает как «ждун»: дожидается всех веток.",
+        "height": 300,
+        "width": 512,
+        "color": 3
+      },
+      "id": "c1000000-0000-4000-8000-0000000000c4",
+      "name": "Заметка merge",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        1200
+      ]
+    }
+  ],
+  "connections": {
+    "Запуск вручную": {
+      "main": [
+        [
+          {
+            "node": "Тестовые данные",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Расписание (пример)": {
+      "main": [
+        [
+          {
+            "node": "Тестовые данные",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Форма (пример)": {
+      "main": [
+        [
+          {
+            "node": "Тестовые данные",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Тестовые данные": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields — меняем поля",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter — только нужное",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF — развилка да/нет",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch — много путей",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sort — сортировка",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Limit — только первые",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Aggregate — в один список",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Out — список в строки",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code — своя логика",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Over Items — по одному",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait — пауза",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "No Operation — заглушка",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge — объединяем потоки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter — только нужное": {
+      "main": [
+        [
+          {
+            "node": "Merge — объединяем потоки",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Europe/Moscow",
+    "saveManualExecutions": true
+  }
+}
