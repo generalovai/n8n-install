@@ -291,6 +291,7 @@ tg_send() {
     "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
     --data-urlencode "chat_id=${TG_CHAT}" \
     --data-urlencode "text=$1" \
+    --data "parse_mode=HTML" \
     --data "disable_web_page_preview=true" 2>/dev/null || true
 }
 
@@ -836,7 +837,9 @@ TXT
     done
     if [ -n "$TG_CHAT" ]; then
       ok "Нашёл вас, ваш ID: $TG_CHAT"
-      tg_send "Проверка связи. Сюда сервер будет писать о вашем n8n."
+      tg_send "✅ <b>Связь есть</b>
+
+Сюда сервер будет писать о вашем n8n. Только по делу — ежедневных сообщений «всё хорошо» не будет."
       ok "Отправил тестовое сообщение - посмотрите, пришло ли"
     else
       warn "Сообщение так и не пришло, уведомления пока выключены."
@@ -1394,11 +1397,11 @@ STAMP="$(date +%F_%H-%M)"
 mkdir -p "$OUT"
 cd "$DIR"
 
-fail() { echo "$1"; "$DIR/notify.sh" "Не удалось сделать резервную копию n8n
+fail() { echo "$1"; "$DIR/notify.sh" "🔴 <b>Не удалось сделать резервную копию</b>
 
 $1
 
-Проверьте место на диске (df -h) и логи."; exit 1; }
+🔧 Проверьте свободное место: <code>df -h</code>"; exit 1; }
 
 echo "Делаем копию базы данных..."
 docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
@@ -1420,12 +1423,14 @@ ls -1t "$OUT"/env-*.txt      2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -f
 USED=$(df -P "$DIR" | awk 'NR==2 {gsub("%","",$5); print $5}')
 if [ "${USED:-0}" -ge 85 ]; then
   echo "ВНИМАНИЕ: диск занят на ${USED}%"
-  "$DIR/notify.sh" "На сервере с n8n заканчивается место: занято ${USED}%
+  "$DIR/notify.sh" "⚠️ <b>Заканчивается место на диске</b>
 
-Что можно сделать:
-  - скачать и удалить старые копии из /opt/n8n/backups
-  - освободить место:  docker system prune -a
-  - увеличить диск у провайдера"
+Занято <b>${USED}%</b>.
+
+🧹 Что можно сделать:
+• скачать и удалить старые копии из <code>/opt/n8n/backups</code>
+• освободить место: <code>docker system prune -a</code>
+• увеличить диск у провайдера"
 fi
 
 echo "Готово. Копии лежат в $OUT"
@@ -1507,8 +1512,12 @@ docker compose up -d n8n >/dev/null 2>&1
 if wait_healthy 300; then
   NEW_VER="$(version_now)"
   log "готово, n8n работает. Версия: $NEW_VER"
-  "$DIR/notify.sh" "n8n обновлён: $OLD_VER -> $NEW_VER
-Всё поднялось и работает. Копия перед обновлением сохранена."
+  "$DIR/notify.sh" "⬆️ <b>n8n обновлён</b>
+
+Было: <code>$OLD_VER</code>
+Стало: <code>$NEW_VER</code>
+
+✅ Всё поднялось и работает. Резервная копия перед обновлением сохранена."
   docker image prune -f >/dev/null 2>&1 || true
   rm -f "$ALERT"
   exit 0
@@ -1557,13 +1566,15 @@ cat > "$ALERT" <<TXT
        $DIR/autoupdate.sh --force
   4. Копии на случай отката лежат в $DIR/backups
 TXT
-"$DIR/notify.sh" "Обновление n8n не удалось
+"$DIR/notify.sh" "⚠️ <b>Обновление не удалось — вернули прежнюю версию</b>
 
-Новая версия не запустилась, поэтому вернули прежнюю: $OLD_VER
-Сценарии и доступы на месте, сайт работает.
+Новая версия не запустилась, поэтому сервер сам откатился на <code>$OLD_VER</code>.
 
-Автообновление поставлено на паузу, чтобы не повторять ошибку каждую ночь.
-Подробности на сервере: /opt/n8n/ОБНОВЛЕНИЕ-НЕ-УДАЛОСЬ.txt"
+✅ Сценарии и доступы на месте, сайт работает.
+
+⏸ Автообновление поставлено на паузу, чтобы не повторять ошибку каждую ночь.
+
+📄 Подробности на сервере: <code>/opt/n8n/ОБНОВЛЕНИЕ-НЕ-УДАЛОСЬ.txt</code>"
 log "подробности записаны в $ALERT"
 exit 1
 EOF
@@ -1606,11 +1617,13 @@ done
 
 touch "$DONE"
 rm -f /etc/cron.d/n8n-workflows
-"$DIR/notify.sh" "В вашем n8n появились готовые воркфлоу
+"$DIR/notify.sh" "📦 <b>В вашем n8n появились готовые воркфлоу</b>
 
-Откройте список - там есть «Проверка сервера». Запустите его кнопкой
-Test workflow: он покажет, до каких сервисов дотягивается ваш n8n
-и с какого адреса он выходит в интернет. Ключи для этого не нужны."
+🚀 <b>Начните с «Проверка сервера»</b> — откройте его и нажмите внизу Test workflow.
+
+Он покажет, с какого адреса ваш n8n выходит в интернет и до каких сервисов дотягивается: Gemini, OpenAI, ElevenLabs и других. Ключи для этого не нужны.
+
+Рядом лежат ещё два воркфлоу: витрина узлов и пример их работы в связке."
 EOF
 chmod +x "$DIR/import-workflows.sh"
 
@@ -1637,6 +1650,7 @@ curl -sS --max-time 20 -o /dev/null \
   "https://api.telegram.org/bot${TOKEN}/sendMessage" \
   --data-urlencode "chat_id=${CHAT}" \
   --data-urlencode "text=$1" \
+  --data "parse_mode=HTML" \
   --data "disable_web_page_preview=true" 2>/dev/null || true
 EOF
 chmod +x "$DIR/notify.sh"
@@ -1665,8 +1679,9 @@ if docker compose exec -T -e http_proxy= -e https_proxy= -e HTTP_PROXY= -e HTTPS
   echo 0 > "$FAILS"
   if [ "$WAS" = "down" ]; then
     printf '%s  снова работает\n' "$(date '+%F %T')" >> "$LOG"
-    "$DIR/notify.sh" "n8n снова работает
-Адрес: https://$FQDN"
+    "$DIR/notify.sh" "🟢 <b>n8n снова работает</b>
+
+🔗 https://$FQDN"
     echo up > "$STATE"
   fi
   exit 0
@@ -1678,11 +1693,14 @@ fi
 N=$((N + 1)); echo "$N" > "$FAILS"
 if [ "$N" -ge 2 ] && [ "$WAS" != "down" ]; then
   printf '%s  не отвечает (проверок подряд: %s)\n' "$(date '+%F %T')" "$N" >> "$LOG"
-  "$DIR/notify.sh" "n8n не отвечает уже минут двадцать
-Адрес: https://$FQDN
+  "$DIR/notify.sh" "🔴 <b>n8n не отвечает</b>
 
-Сервер пробует поднять его сам. Если сообщения о восстановлении не будет,
-зайдите и посмотрите:  cd /opt/n8n && docker compose logs --tail 50 n8n"
+🔗 https://$FQDN
+
+Не отвечает уже около двадцати минут. Сервер пробует поднять его сам.
+
+🔧 Если сообщения о восстановлении не будет, зайдите на сервер и посмотрите:
+<code>cd /opt/n8n \&\& docker compose logs --tail 50 n8n</code>"
   echo down > "$STATE"
 fi
 EOF
@@ -1780,15 +1798,14 @@ VER="$(docker compose exec -T n8n n8n --version 2>/dev/null | tr -d '\r')"
 DISK="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
 COPIES="$(ls -1 "$DIR"/backups/db-*.sql.gz 2>/dev/null | wc -l | tr -d ' ')"
 LAST="$(ls -1t "$DIR"/backups/db-*.sql.gz 2>/dev/null | head -1 | sed 's|.*/db-||; s|\.sql\.gz||')"
-"$DIR/notify.sh" "Ежемесячная сводка по n8n
+"$DIR/notify.sh" "📊 <b>Ежемесячная сводка</b>
 
-Адрес: https://$FQDN
-Версия: ${VER:-неизвестно}
-Диск занят: ${DISK}%
-Резервных копий: ${COPIES}, последняя ${LAST:-нет}
+🔗 https://$FQDN
+🏷 Версия: <code>${VER:-неизвестно}</code>
+💾 Диск занят: <b>${DISK}%</b>
+🗄 Резервных копий: <b>${COPIES}</b>, последняя ${LAST:-нет}
 
-Это сообщение приходит раз в месяц. Если оно перестало приходить -
-значит уведомления сломались, стоит проверить."
+Это сообщение приходит раз в месяц. Если перестало приходить — значит сломались сами уведомления, стоит проверить."
 EOF
 chmod +x "$DIR/report.sh"
 
@@ -2031,15 +2048,16 @@ if [ -n "$CONTAINER_PROXY" ]; then
   fi
 fi
 
-tg_send "n8n установлен и работает
+tg_send "🎉 <b>n8n установлен и работает</b>
 
-Адрес: https://$FQDN
+🔗 <b>Адрес:</b> https://$FQDN
 
-Откройте ссылку и создайте учётную запись владельца - прямо сейчас, пока это
-не сделал кто-то другой.
+👤 <b>Что сделать сейчас:</b> откройте ссылку и создайте учётную запись владельца. Сделайте это сразу — пока аккаунта нет, занять ваш n8n может любой, кто знает адрес.
 
-Ключ шифрования (сохраните, без него не восстановить доступы):
-$N8N_ENCRYPTION_KEY"
+🔑 <b>Ключ шифрования — сохраните его:</b>
+<code>$N8N_ENCRYPTION_KEY</code>
+
+Им зашифрованы все ваши доступы к сервисам. Без него восстановить их из резервной копии невозможно."
 
 # ---------- итог -------------------------------------------------------------
 say ""
