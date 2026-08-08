@@ -561,9 +561,10 @@ socks5://логин:пароль@адрес:порт</code></pre>
     <section class="step">
       <div class="num" data-num="run">6</div>
       <h3>Запустите установку</h3>
-      <p>Вставьте эту команду в терминал сервера и нажмите Enter:</p>
+      <p>Вставьте эту команду в терминал сервера и нажмите Enter. Она скачивает
+         установщик и сразу его запускает:</p>
       <div class="cmd">
-        <pre><code id="c-install">sudo bash &lt;(curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh)</code></pre>
+        <pre><code id="c-install">curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh -o n8n-install.sh &amp;&amp; bash n8n-install.sh</code></pre>
         <button class="copy" data-for="c-install">Копировать</button>
       </div>
       <p>Дальше скрипт спросит по-русски: адрес для n8n, нужен ли прокси, где DNS,
@@ -731,6 +732,17 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
     </details>
 
     <details>
+      <summary>Пишет «/dev/fd/63: No such file or directory»</summary>
+      <div class="body">
+        <p>Значит вы запустили команду в старой форме, через <code>sudo bash &lt;(curl ...)</code>.
+           Так не сработает: <code>sudo</code> закрывает канал, по которому передавался скачанный
+           файл.</p>
+        <p>Возьмите команду со страницы выше — она сначала скачивает установщик в файл,
+           а потом запускает. Работает в любом случае.</p>
+      </div>
+    </details>
+
+    <details>
       <summary>Установка оборвалась на середине</summary>
       <div class="body">
         <p>Запустите ту же команду ещё раз. Скрипт написан так, что повторный запуск безопасен:
@@ -763,6 +775,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
 <script>
 (function () {
   var REPO = "https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh";
+  var CMD = "curl -sSL " + REPO + " -o n8n-install.sh && bash n8n-install.sh";
 
   var dEl = document.getElementById("f-domain"),
       iEl = document.getElementById("f-ip"),
@@ -816,7 +829,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
 
     document.getElementById("c-ssh").textContent = "ssh root@" + ip;
     document.getElementById("c-url").textContent = "https://" + d;
-    document.getElementById("c-install").textContent = "sudo bash <(curl -sSL " + REPO + ")";
+    document.getElementById("c-install").textContent = CMD;
 
     var cf = pick("reg") === "cf";      // домен куплен в Cloudflare -> DNS уже там
     var needProxy = pick("srv") === "ru"; // сервер в России -> нужен прокси

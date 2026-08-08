@@ -4,7 +4,7 @@
 #  Для Ubuntu / Debian. Запускать от root на чистом VPS.
 #
 #  Запуск одной командой:
-#    sudo bash <(curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh)
+#    curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh -o n8n-install.sh && bash n8n-install.sh
 #
 #  Умеет:
 #    - домен от любого регистратора (reg.ru и т.п.) - сертификат по HTTP;
@@ -60,8 +60,9 @@ if exec 3</dev/tty 2>/dev/null; then :; else exec 3<&0; fi
 no_input() {
   die "Скрипт не может задать вам вопрос: терминал недоступен.
 Скорее всего, вы запустили его так:  curl ... | bash
-Запустите вот так (обратите внимание на скобки):
-  sudo bash <(curl -sSL <ссылка на скрипт>)"
+Скачайте файл и запустите отдельной командой:
+  curl -sSL <ссылка на скрипт> -o n8n-install.sh
+  bash n8n-install.sh"
 }
 
 ask() { # ask ПЕРЕМЕННАЯ "Вопрос" "значение_по_умолчанию"
@@ -220,8 +221,8 @@ TXT
 step "Шаг 0 из 10. Проверяем сервер"
 
 [ "$(id -u)" -eq 0 ] || die "Скрипт нужно запускать от имени root.
-Попробуйте ту же команду, но добавьте в начало  sudo  :
-  sudo bash <(curl -sSL <ссылка на скрипт>)"
+Добавьте в начало команды  sudo  :
+  sudo bash n8n-install.sh"
 
 [ -r /etc/os-release ] || die "Не удалось определить операционную систему. Нужна Ubuntu или Debian."
 # shellcheck disable=SC1091

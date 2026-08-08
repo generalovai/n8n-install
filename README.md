@@ -6,10 +6,13 @@
 ## Команда для зрителей
 
 ```bash
-sudo bash <(curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh)
+curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh -o n8n-install.sh && bash n8n-install.sh
 ```
 
-> Форма `bash <(curl ...)` обязательна — при `curl ... | bash` скрипт не сможет задавать вопросы (он это ловит и объясняет).
+> Команда намеренно в два шага. Красивая форма `bash <(curl ...)` **ломается под `sudo`**:
+> sudo закрывает файловые дескрипторы, и подставленный `/dev/fd/63` исчезает — проверено
+> на живом сервере. А `curl ... | bash` лишает скрипт возможности задавать вопросы.
+> Скачать файл и запустить — единственный вариант, который работает везде.
 
 ## Гид для зрителей
 
