@@ -669,16 +669,53 @@ say "Почта нужна только для бесплатного серти
 ask SSL_EMAIL "Ваш e-mail" "${SSL_EMAIL_DEF:-admin@${FQDN#*.}}"
 
 TZ_DEF="$(env_get GENERIC_TIMEZONE || true)"
-if [ -z "$TZ_DEF" ] && [ -r /etc/timezone ]; then TZ_DEF="$(cat /etc/timezone)"; fi
 say ""
-say "Часовой пояс нужен, чтобы задачи по расписанию срабатывали в нужное время."
-say "Примеры: Europe/Moscow, Europe/Kyiv, Europe/Minsk, Asia/Almaty, Asia/Tbilisi"
+cat <<'TXT'
+  Часовой пояс нужен, чтобы задачи по расписанию срабатывали вовремя
+  и ночные копии делались ночью, а не днём.
+
+  Напишите просто вашу разницу с UTC:
+     Калининград +2     Москва, Питер +3     Самара +4
+     Екатеринбург +5    Омск +6              Новосибирск, Красноярск +7
+     Иркутск +8         Якутск +9            Владивосток +10
+     Минск +3           Алматы +5            Тбилиси +4     Ереван +4
+
+  Если у вас переводят часы (Украина, Европа) - напишите название пояса,
+  например  Europe/Kyiv  или  Europe/Berlin
+
+TXT
+# Принимаем и цифру со смещением, и полное имя пояса - кому как привычнее.
+# Смещение переводим в настоящий пояс: так и n8n понимает, и человеку
+# в его настройках видно знакомое название.
+offset_to_zone() {
+  case "$1" in
+    2)  echo Europe/Kaliningrad ;;   3)  echo Europe/Moscow ;;
+    4)  echo Europe/Samara ;;        5)  echo Asia/Yekaterinburg ;;
+    6)  echo Asia/Omsk ;;            7)  echo Asia/Novosibirsk ;;
+    8)  echo Asia/Irkutsk ;;         9)  echo Asia/Yakutsk ;;
+    10) echo Asia/Vladivostok ;;     11) echo Asia/Magadan ;;
+    12) echo Asia/Kamchatka ;;       0)  echo UTC ;;
+    # для остальных смещений берём технический пояс с ровно этой разницей
+    # (в имени Etc знак перевёрнут - это особенность стандарта)
+    -*) echo "Etc/GMT+${1#-}" ;;
+    *)  echo "Etc/GMT-$1" ;;
+  esac
+}
+
 while :; do
-  ask GENERIC_TIMEZONE "Ваш часовой пояс" "${TZ_DEF:-Europe/Moscow}"
-  [ -f "/usr/share/zoneinfo/$GENERIC_TIMEZONE" ] && break
-  warn "Такого часового пояса нет. Напишите точно как в примерах, с большой буквы."
+  ask TZ_IN "Ваш часовой пояс" "${TZ_DEF:-+3}"
+  case "$TZ_IN" in
+    */*)                                   # написали полное имя пояса
+      GENERIC_TIMEZONE="$TZ_IN" ;;
+    [+-]*[0-9]|[+-]*[0-9][0-9]|[0-9]|[0-9][0-9])   # написали смещение
+      _off="${TZ_IN#+}"; _off="${_off#0}"; [ -z "$_off" ] && _off=0
+      GENERIC_TIMEZONE="$(offset_to_zone "$_off")" ;;
+    *)  warn "Не понял. Напишите разницу с UTC, например  +3"; continue ;;
+  esac
+  if [ -f "/usr/share/zoneinfo/$GENERIC_TIMEZONE" ]; then break; fi
+  warn "Такого часового пояса нет. Напишите разницу с UTC, например  +3"
 done
-ok "Часовой пояс: $GENERIC_TIMEZONE"
+ok "Часовой пояс: $GENERIC_TIMEZONE (сейчас там $(TZ="$GENERIC_TIMEZONE" date '+%H:%M'))"
 
 # Задания по расписанию (копии, обновления) идут по системному времени сервера,
 # а на VPS это почти всегда UTC. Ставим выбранный пояс, чтобы "ночью в 2:00"
@@ -1407,7 +1444,7 @@ version_now() { docker compose exec -T n8n n8n --version 2>/dev/null | tr -d '\r
 wait_healthy() { # wait_healthy СЕКУНД
   local limit="$1" waited=0
   while [ "$waited" -lt "$limit" ]; do
-    if docker compose exec -T n8n wget -qO- http://localhost:5678/healthz/readiness 2>/dev/null | grep -q '"ok"'; then
+    if docker compose exec -T -e http_proxy= -e https_proxy= -e HTTP_PROXY= -e HTTPS_PROXY= n8n wget -qO- http://localhost:5678/healthz/readiness 2>/dev/null | grep -q '"ok"'; then
       return 0
     fi
     sleep 5; waited=$((waited + 5))
@@ -1435,6 +1472,10 @@ if [ "$OLD_ID" = "$NEW_ID" ] && [ "$FORCE" != "--force" ]; then
   log "новой версии нет, всё оставляем как есть"
   exit 0
 fi
+
+# Пока идём - сторож должен молчать: перезапуск n8n это не авария
+touch "$DIR/.update-in-progress"
+trap 'rm -f "$DIR/.update-in-progress"' EXIT
 
 log "есть новая версия - делаем резервную копию перед обновлением"
 "$DIR/backup.sh" >/dev/null 2>&1 || { log "копия не сделалась - обновление отменено"; exit 1; }
@@ -1529,34 +1570,45 @@ chmod +x "$DIR/notify.sh"
 cat > "$DIR/watch.sh" <<'EOF'
 #!/usr/bin/env bash
 # Раз в 10 минут проверяет, жив ли n8n. Сообщает один раз, когда он лёг,
-# и один раз, когда снова заработал. Молчит, пока всё хорошо.
+# и один раз, когда снова заработал. Пока всё хорошо - молчит.
 set -uo pipefail
 DIR=/opt/n8n
-STATE="$DIR/.watch-state"
+STATE="$DIR/.watch-state"     # о чём уже сообщили: up или down
+FAILS="$DIR/.watch-fails"     # сколько проверок подряд не ответил
+LOCK="$DIR/.update-in-progress"
 LOG=/var/log/n8n-watch.log
 cd "$DIR" || exit 0
 
+# Во время обновления n8n перезапускается - это не авария, молчим.
+[ -f "$LOCK" ] && exit 0
+
 FQDN="$(grep '^N8N_FQDN=' .env | cut -d= -f2-)"
 WAS="$(cat "$STATE" 2>/dev/null || echo up)"
+N="$(cat "$FAILS" 2>/dev/null || echo 0)"
 
-if docker compose exec -T n8n wget -qO- --timeout=15 http://localhost:5678/healthz 2>/dev/null | grep -q '"ok"'; then
-  NOW=up
-else
-  NOW=down
-fi
-
-if [ "$NOW" != "$WAS" ]; then
-  printf '%s  %s\n' "$(date '+%F %T')" "$NOW" >> "$LOG"
-  if [ "$NOW" = "down" ]; then
-    "$DIR/notify.sh" "n8n перестал отвечать
-Адрес: https://$FQDN
-Сервер пробует поднять его сам. Если через полчаса сообщения о восстановлении
-не будет - зайдите на сервер и посмотрите:  cd /opt/n8n && docker compose logs --tail 50 n8n"
-  else
+if docker compose exec -T -e http_proxy= -e https_proxy= -e HTTP_PROXY= -e HTTPS_PROXY= n8n wget -qO- --timeout=15 http://localhost:5678/healthz 2>/dev/null | grep -q '"ok"'; then
+  echo 0 > "$FAILS"
+  if [ "$WAS" = "down" ]; then
+    printf '%s  снова работает\n' "$(date '+%F %T')" >> "$LOG"
     "$DIR/notify.sh" "n8n снова работает
 Адрес: https://$FQDN"
+    echo up > "$STATE"
   fi
-  echo "$NOW" > "$STATE"
+  exit 0
+fi
+
+# Не ответил. Одна осечка - не повод будить человека: n8n мог
+# перезапускаться. Сообщаем только со второй проверки подряд, то есть
+# когда он недоступен уже минут двадцать.
+N=$((N + 1)); echo "$N" > "$FAILS"
+if [ "$N" -ge 2 ] && [ "$WAS" != "down" ]; then
+  printf '%s  не отвечает (проверок подряд: %s)\n' "$(date '+%F %T')" "$N" >> "$LOG"
+  "$DIR/notify.sh" "n8n не отвечает уже минут двадцать
+Адрес: https://$FQDN
+
+Сервер пробует поднять его сам. Если сообщения о восстановлении не будет,
+зайдите и посмотрите:  cd /opt/n8n && docker compose logs --tail 50 n8n"
+  echo down > "$STATE"
 fi
 EOF
 chmod +x "$DIR/watch.sh"
@@ -1599,7 +1651,7 @@ g() { grep "^$1=" .env 2>/dev/null | cut -d= -f2-; }
   echo
   echo "=== n8n ==="
   echo "версия: $(docker compose exec -T n8n n8n --version 2>/dev/null | tr -d '\r')"
-  echo "внутренняя проверка: $(docker compose exec -T n8n wget -qO- http://localhost:5678/healthz/readiness 2>/dev/null)"
+  echo "внутренняя проверка: $(docker compose exec -T -e http_proxy= -e https_proxy= -e HTTP_PROXY= -e HTTPS_PROXY= n8n wget -qO- http://localhost:5678/healthz/readiness 2>/dev/null)"
   echo "снаружи по адресу:   $(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://$(g N8N_FQDN)/healthz" 2>/dev/null)"
   echo "сертификат: $(docker compose logs caddy 2>/dev/null | grep -c 'certificate obtained') раз(а) получен"
 
@@ -1842,10 +1894,13 @@ info "Стартуем..."
 # например, мост socks5, если человек сменил прокси на обычный
 dc up -d --remove-orphans
 
+# ВАЖНО: прокси для этой проверки гасим. wget внутри контейнера уважает
+# http_proxy и пойдёт спрашивать про localhost у зарубежного прокси,
+# а тот ответит 403 - проверка провалится при живом n8n (проверено вживую).
 info "Ждём, пока n8n поднимется..."
 UP=нет
 for _ in $(seq 1 60); do
-  if dc exec -T n8n wget -qO- http://localhost:5678/healthz 2>/dev/null | grep -q '"ok"'; then
+  if dc exec -T -e http_proxy= -e https_proxy= -e HTTP_PROXY= -e HTTPS_PROXY= n8n wget -qO- http://localhost:5678/healthz 2>/dev/null | grep -q '"ok"'; then
     UP=да; break
   fi
   sleep 5
