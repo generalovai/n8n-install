@@ -1392,7 +1392,6 @@ cat > "$DIR/backup.sh" <<'EOF'
 set -Eeuo pipefail
 DIR=/opt/n8n
 OUT="$DIR/backups"
-KEEP=14
 STAMP="$(date +%F_%H-%M)"
 mkdir -p "$OUT"
 cd "$DIR"
@@ -1415,23 +1414,54 @@ docker run --rm -v n8n_data:/data -v "$OUT":/backup alpine \
 cp "$DIR/.env" "$OUT/env-$STAMP.txt"
 chmod 600 "$OUT"/*
 
-ls -1t "$OUT"/db-*.sql.gz    2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -f
-ls -1t "$OUT"/files-*.tar.gz 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -f
-ls -1t "$OUT"/env-*.txt      2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -f
+# Чем старше копия, тем реже она нужна. Держим:
+#   - все за последние 7 дней (вчерашняя ошибка - самый частый случай),
+#   - по одной на каждую из 4 последних недель,
+#   - по одной на каждый из 3 последних месяцев.
+# Итого около 14 файлов вместо 90, а дотянуться можно на три месяца назад.
+rotate() {   # rotate ПРЕФИКС РАСШИРЕНИЕ
+  local pref="$1" ext="$2" f day week month n=0
+  local weeks="" months="" keep=""
+  while read -r f; do
+    [ -n "$f" ] || continue
+    day="$(basename "$f" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)"
+    [ -n "$day" ] || { keep="$keep$f\n"; continue; }   # непонятное имя - не трогаем
+    n=$((n + 1))
+    if [ "$n" -le 7 ]; then keep="$keep$f\n"; continue; fi
+    week="$(date -d "$day" +%G-%V 2>/dev/null || echo "$day")"
+    month="${day%-*}"
+    case " $weeks " in *" $week "*) ;; *)
+      if [ "$(printf '%s' "$weeks" | wc -w)" -lt 4 ]; then
+        weeks="$weeks $week"; keep="$keep$f\n"; continue
+      fi ;;
+    esac
+    case " $months " in *" $month "*) ;; *)
+      if [ "$(printf '%s' "$months" | wc -w)" -lt 3 ]; then
+        months="$months $month"; keep="$keep$f\n"; continue
+      fi ;;
+    esac
+  done < <(ls -1t "$OUT/$pref"*"$ext" 2>/dev/null)
 
-# заканчивается место - предупреждаем заранее, пока не поздно
-USED=$(df -P "$DIR" | awk 'NR==2 {gsub("%","",$5); print $5}')
-if [ "${USED:-0}" -ge 85 ]; then
-  echo "ВНИМАНИЕ: диск занят на ${USED}%"
-  "$DIR/notify.sh" "⚠️ <b>Заканчивается место на диске</b>
+  ls -1 "$OUT/$pref"*"$ext" 2>/dev/null | while read -r f; do
+    printf '%b' "$keep" | grep -qxF "$f" || rm -f "$f"
+  done
+}
 
-Занято <b>${USED}%</b>.
+rotate "db-"    ".sql.gz"
+rotate "files-" ".tar.gz"
+rotate "env-"   ".txt"
 
-🧹 Что можно сделать:
-• скачать и удалить старые копии из <code>/opt/n8n/backups</code>
-• освободить место: <code>docker system prune -a</code>
-• увеличить диск у провайдера"
-fi
+# Страховка от переполнения: если копии заняли больше пятой части диска,
+# удаляем самые старые, пока не уложимся. Свободное место важнее глубины архива.
+DISK_KB=$(df -P -k "$DIR" | awk 'NR==2 {print $2}')
+LIMIT_KB=$(( DISK_KB / 5 ))
+while [ "$(du -sk "$OUT" | awk '{print $1}')" -gt "$LIMIT_KB" ]; do
+  OLDEST="$(ls -1tr "$OUT"/db-*.sql.gz 2>/dev/null | head -1)"
+  [ -n "$OLDEST" ] || break
+  STAMP_OLD="$(basename "$OLDEST" | sed 's/^db-//; s/\.sql\.gz$//')"
+  echo "Копии заняли много места - удаляю самую старую: $STAMP_OLD"
+  rm -f "$OUT"/db-"$STAMP_OLD".sql.gz "$OUT"/files-"$STAMP_OLD".tar.gz "$OUT"/env-"$STAMP_OLD".txt
+done
 
 echo "Готово. Копии лежат в $OUT"
 echo "ВАЖНО: скачайте их себе на компьютер - копия на том же сервере не спасёт, если сервер пропадёт."
