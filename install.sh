@@ -573,12 +573,28 @@ while :; do
 done
 ok "Часовой пояс: $GENERIC_TIMEZONE"
 
+# Задания по расписанию (копии, обновления) идут по системному времени сервера,
+# а на VPS это почти всегда UTC. Ставим выбранный пояс, чтобы "ночью в 2:00"
+# означало ночь у владельца, а не где-то в Гринвиче.
+if [ "$(cat /etc/timezone 2>/dev/null)" != "$GENERIC_TIMEZONE" ]; then
+  if timedatectl set-timezone "$GENERIC_TIMEZONE" >/dev/null 2>&1; then
+    :
+  else
+    ln -sf "/usr/share/zoneinfo/$GENERIC_TIMEZONE" /etc/localtime 2>/dev/null || true
+    printf '%s\n' "$GENERIC_TIMEZONE" > /etc/timezone 2>/dev/null || true
+  fi
+  # cron читает часовой пояс при старте - без перезапуска он остался бы на старом
+  systemctl restart cron >/dev/null 2>&1 || service cron restart >/dev/null 2>&1 || true
+  ok "Время сервера переведено на $GENERIC_TIMEZONE (сейчас $(date '+%H:%M'))"
+fi
+
 AUTO_UPDATE="$(env_get AUTO_UPDATE || true)"
 if [ -z "$AUTO_UPDATE" ]; then
   say ""
   cat <<'TXT'
   Обновления n8n выходят часто, и в них чинят ошибки и дыры в безопасности.
-  Скрипт может обновлять n8n сам, каждую ночь в 2 часа:
+  Скрипт может обновлять n8n сам, каждую ночь в 3 часа (сразу после копии,
+  по времени вашего часового пояса):
 
     - сначала проверит, вышла ли новая версия (если нет - ничего не делает);
     - сделает резервную копию;
@@ -1610,14 +1626,14 @@ chmod 644 /etc/logrotate.d/n8n
 
 if [ ! -f /etc/cron.d/n8n-backup ]; then
   cat > /etc/cron.d/n8n-backup <<'EOF'
-# Ежедневная резервная копия n8n в 03:30
+# Ежедневная резервная копия n8n в 02:00 (по времени сервера)
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-30 3 * * * root /opt/n8n/backup.sh >> /var/log/n8n-backup.log 2>&1
+0 2 * * * root /opt/n8n/backup.sh >> /var/log/n8n-backup.log 2>&1
 EOF
   chmod 644 /etc/cron.d/n8n-backup
 fi
-ok "Ежедневная резервная копия настроена (каждую ночь в 03:30)"
+ok "Ежедневная резервная копия настроена (каждую ночь в 02:00)"
 
 if [ -n "$TG_CHAT" ]; then
   cat > /etc/cron.d/n8n-watch <<'EOF'
@@ -1641,13 +1657,14 @@ fi
 
 if [ "$AUTO_UPDATE" = "да" ]; then
   cat > /etc/cron.d/n8n-update <<'EOF'
-# Ночная проверка обновлений n8n в 02:00 (сама делает копию и откат при неудаче)
+# Проверка обновлений n8n в 03:00 - после ночной копии.
+# Перед самим обновлением скрипт делает ещё одну, свежую.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-0 2 * * * root /opt/n8n/autoupdate.sh >> /var/log/n8n-update.log 2>&1
+0 3 * * * root /opt/n8n/autoupdate.sh >> /var/log/n8n-update.log 2>&1
 EOF
   chmod 644 /etc/cron.d/n8n-update
-  ok "Автообновление включено (проверка каждую ночь в 02:00)"
+  ok "Автообновление включено (проверка каждую ночь в 03:00, после копии)"
 else
   rm -f /etc/cron.d/n8n-update
   ok "Автообновление выключено - обновлять командой /opt/n8n/update.sh"
@@ -1817,11 +1834,11 @@ cat <<TXT
     Остановить:              cd /opt/n8n && docker compose down
     Запустить снова:         cd /opt/n8n && docker compose up -d
 
-  $([ "$AUTO_UPDATE" = "да" ] && echo "Каждую ночь в 02:00 n8n проверяет обновления и ставит их сам.
+  $([ "$AUTO_UPDATE" = "да" ] && echo "Каждую ночь в 03:00 n8n проверяет обновления и ставит их сам.
   Если новая версия не запустится, он вернёт прежнюю и напишет об этом
   в файл /opt/n8n/ОБНОВЛЕНИЕ-НЕ-УДАЛОСЬ.txt" || echo "Автообновление выключено.")
 
-  Резервные копии создаются каждую ночь в 03:30 и лежат в
+  Резервные копии создаются каждую ночь в 02:00 и лежат в
   /opt/n8n/backups (хранятся последние 14 штук).
   Иногда скачивайте их себе на компьютер.
 
