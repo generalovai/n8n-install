@@ -1794,16 +1794,27 @@ g() { grep "^$1=" .env 2>/dev/null | cut -d= -f2-; }
   echo "=== n8n ==="
   echo "версия: $(docker compose exec -T n8n n8n --version 2>/dev/null | tr -d '\r')"
   echo "внутренняя проверка: $(docker compose exec -T -e http_proxy= -e https_proxy= -e HTTP_PROXY= -e HTTPS_PROXY= n8n wget -qO- http://localhost:5678/healthz/readiness 2>/dev/null)"
-  echo "снаружи по адресу:   $(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://$(g N8N_FQDN)/healthz" 2>/dev/null)"
+  OUTSIDE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://$(g N8N_FQDN)/healthz" 2>/dev/null)"
+  case "$OUTSIDE" in
+    200) echo "снаружи по адресу:   отвечает (200)" ;;
+    000|"") echo "снаружи по адресу:   НЕ ОТВЕЧАЕТ - не открывается снаружи (домен, сертификат или файрвол)" ;;
+    *)   echo "снаружи по адресу:   отвечает кодом $OUTSIDE" ;;
+  esac
   echo "сертификат: $(docker compose logs caddy 2>/dev/null | grep -c 'certificate obtained') раз(а) получен"
 
   echo
   echo "=== ОШИБКИ В ЖУРНАЛЕ n8n (последние) ==="
-  docker compose logs --tail 400 n8n 2>/dev/null | grep -iE 'error|fatal|cannot|refused|denied' | tail -15 || echo "(нет)"
+  # Отсеиваем ложные срабатывания: в названиях миграций n8n встречается слово
+  # Error, и без этого фильтра отчёт пугает несуществующими проблемами.
+  N8N_ERR="$(docker compose logs --tail 400 n8n 2>/dev/null \
+    | grep -iE 'error|fatal|cannot|refused|denied' \
+    | grep -viE 'migration|DeprecationWarning|deprecat' | tail -15)"
+  [ -n "$N8N_ERR" ] && printf '%s\n' "$N8N_ERR" || echo "(ошибок нет)"
 
   echo
   echo "=== ОШИБКИ CADDY (последние) ==="
-  docker compose logs --tail 200 caddy 2>/dev/null | grep -i 'error' | tail -8 || echo "(нет)"
+  CADDY_ERR="$(docker compose logs --tail 200 caddy 2>/dev/null | grep -i 'error' | tail -8)"
+  [ -n "$CADDY_ERR" ] && printf '%s\n' "$CADDY_ERR" || echo "(ошибок нет)"
 
   echo
   echo "=== ОБНОВЛЕНИЯ ==="
@@ -1816,7 +1827,11 @@ g() { grep "^$1=" .env 2>/dev/null | cut -d= -f2-; }
 
   echo
   echo "=== РЕЗЕРВНЫЕ КОПИИ ==="
-  ls -lh backups 2>/dev/null | tail -8 || echo "(копий нет)"
+  if ls backups/db-*.sql.gz >/dev/null 2>&1; then
+    ls -lh backups 2>/dev/null | tail -8
+  else
+    echo "(копий пока нет - первая появится ночью в 02:00)"
+  fi
 
   echo
   echo "=== ЗАДАНИЯ ПО РАСПИСАНИЮ ==="
@@ -1831,6 +1846,7 @@ echo
 echo "-----------------------------------------------------------"
 echo "Отчёт сохранён: $OUT"
 echo "В нём нет паролей и ключей - можно спокойно переслать за помощью."
+echo "Скачать файл к себе:  scp root@$(g N8N_FQDN):$OUT ."
 EOF
 chmod +x "$DIR/diagnose.sh"
 
