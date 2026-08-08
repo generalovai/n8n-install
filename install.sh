@@ -1463,6 +1463,20 @@ while [ "$(du -sk "$OUT" | awk '{print $1}')" -gt "$LIMIT_KB" ]; do
   rm -f "$OUT"/db-"$STAMP_OLD".sql.gz "$OUT"/files-"$STAMP_OLD".tar.gz "$OUT"/env-"$STAMP_OLD".txt
 done
 
+# Заканчивается место - предупреждаем заранее, пока не поздно.
+USED=$(df -P "$DIR" | awk 'NR==2 {gsub("%","",$5); print $5}')
+if [ "${USED:-0}" -ge 85 ]; then
+  echo "ВНИМАНИЕ: диск занят на ${USED}%"
+  "$DIR/notify.sh" "⚠️ <b>Заканчивается место на диске</b>
+
+Занято <b>${USED}%</b>.
+
+🧹 Что можно сделать:
+• скачать и удалить старые копии из <code>/opt/n8n/backups</code>
+• освободить место: <code>docker system prune -a</code>
+• увеличить диск у провайдера"
+fi
+
 echo "Готово. Копии лежат в $OUT"
 echo "ВАЖНО: скачайте их себе на компьютер - копия на том же сервере не спасёт, если сервер пропадёт."
 ls -lh "$OUT" | tail -n 6

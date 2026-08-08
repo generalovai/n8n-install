@@ -28,18 +28,22 @@ echo "== 3. Разбор адреса прокси =="
 bash "$ROOT/tests/proxy-formats.sh"
 
 echo
-echo "== 4. Ротация резервных копий =="
+echo "== 4. Ключевые возможности на месте =="
+bash "$ROOT/tests/features.sh"
+
+echo
+echo "== 5. Ротация резервных копий =="
 bash "$ROOT/tests/backup-rotation.sh"
 
 echo
-echo "== 5. Сценарии установки в Ubuntu =="
+echo "== 6. Сценарии установки в Ubuntu =="
 docker run --rm \
   -v "$ROOT/tests:/tests:ro" \
   -v "$ROOT/install.sh:/work/install.sh:ro" \
   ubuntu:22.04 bash /tests/scenarios.sh
 
 echo
-echo "== 6. Проверка docker-compose.yml, который генерирует установщик =="
+echo "== 7. Проверка docker-compose.yml, который генерирует установщик =="
 bash "$ROOT/tests/compose-check.sh"
 
 rm -rf "$TMP"
