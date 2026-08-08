@@ -19,11 +19,11 @@ for mode in plain cloudflare; do
   D="$WORK/$mode"; mkdir -p "$D"
   if [ "$mode" = plain ]; then
     # домен, прокси?н, Cloudflare?н, почта, часовой пояс, автообновление?д, уведомления?н
-    gen "$D" 'n8n.mysite.ru\nн\nн\nadmin@m.ru\nEurope/Moscow\nд\nн\n'
+    gen "$D" 'n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
   else
     # домен, прокси?д, адрес, подтверждение адреса, Cloudflare?д, токен,
     # оранжевое облако?д, почта, часовой пояс, автообновление?д, уведомления?н
-    gen "$D" 'n8n.example.ru\nд\nsocks5://u:secret@1.2.3.4:1080\nд\nд\ntoken123\nд\nadmin@e.ru\nEurope/Moscow\nд\nн\n'
+    gen "$D" 'n8n.example.ru\ny\nsocks5://u:secret@1.2.3.4:1080\ny\ny\ntoken123\ny\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
   fi
   own
 
