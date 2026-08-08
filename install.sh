@@ -737,6 +737,22 @@ step "Шаг 7 из 10. Docker"
 
 # Прокси демону Docker нужен ДО первого скачивания образов: без него из России
 # образы часто не скачиваются вообще.
+# apt тоже должен ходить через прокси: из России репозиторий Docker и часть
+# зеркал Ubuntu недоступны напрямую. Переменных окружения ему мало.
+setup_apt_proxy() {
+  if [ -n "$PROXY_URL" ]; then
+    local ap="$PROXY_URL"
+    [ "$PROXY_KIND" = "socks5" ] && ap="${PROXY_URL/#socks5:\/\//socks5h://}"
+    printf 'Acquire::http::Proxy "%s";\nAcquire::https::Proxy "%s";\n' "$ap" "$ap" \
+      > /etc/apt/apt.conf.d/01n8n-proxy
+    export http_proxy="$PROXY_URL" https_proxy="$PROXY_URL"
+    export HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL"
+  else
+    rm -f /etc/apt/apt.conf.d/01n8n-proxy
+    unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+  fi
+}
+
 DOCKER_PROXY_CONF=/etc/systemd/system/docker.service.d/http-proxy.conf
 setup_docker_proxy() {
   mkdir -p /etc/systemd/system/docker.service.d
@@ -764,6 +780,9 @@ setup_docker_proxy() {
   rm -f "$new"
 }
 
+setup_apt_proxy
+[ -n "$PROXY_URL" ] && ok "apt и загрузчик Docker направлены через ваш прокси"
+
 if docker compose version >/dev/null 2>&1; then
   ok "Docker уже установлен ($(docker --version | cut -d, -f1))"
   setup_docker_proxy
@@ -772,12 +791,25 @@ else
   pcurl -fsSL --max-time 120 https://get.docker.com -o /tmp/get-docker.sh \
     || die "Не удалось скачать установщик Docker.
 Если сервер в России - вернитесь на шаг 2 и укажите прокси."
-  if [ -n "$PROXY_URL" ] && [ "$PROXY_KIND" != "socks5" ]; then
-    HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" sh /tmp/get-docker.sh >/dev/null 2>&1 \
-      || die "Не удалось установить Docker. Подробности в логе: $LOG"
-  else
-    sh /tmp/get-docker.sh >/dev/null 2>&1 || die "Не удалось установить Docker. Подробности в логе: $LOG"
+
+  # Вывод установщика Docker сохраняем: без него причину сбоя не узнать.
+  DOCKER_OUT="$(mktemp)"
+  if ! sh /tmp/get-docker.sh >"$DOCKER_OUT" 2>&1; then
+    cat "$DOCKER_OUT" >> "$LOG"
+    say ""
+    say "Что ответил установщик Docker (последние строки):"
+    tail -20 "$DOCKER_OUT" | sed 's/^/    /'
+    die "Не удалось установить Docker.
+
+Смотрите строки выше - там настоящая причина. Чаще всего это одно из двух:
+  - сервер в России и не может достучаться до download.docker.com;
+    вернитесь на шаг 2 и укажите рабочий прокси;
+  - в системе остались старые пакеты Docker и они конфликтуют;
+    помогает:  apt-get remove -y docker docker-engine docker.io containerd runc
+
+Полный вывод сохранён в $LOG"
   fi
+  rm -f "$DOCKER_OUT"
   rm -f /tmp/get-docker.sh
   systemctl enable --now docker >/dev/null 2>&1 || true
   docker compose version >/dev/null 2>&1 || die "Docker установился, но плагин compose не работает.
