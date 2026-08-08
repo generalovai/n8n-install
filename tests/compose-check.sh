@@ -10,6 +10,11 @@ gen() { # gen ПАПКА ОТВЕТЫ
     "bash /stubs.sh; export PATH=/stub:\$PATH; printf '$2' | bash /work/install.sh >/dev/null 2>&1; cp -r /opt/n8n/. /out/"
 }
 
+# Файлы внутри контейнера создаются от root. На Linux-раннере обычный
+# пользователь потом не может их прочитать (.env вообще 600), поэтому
+# сразу возвращаем себе владение.
+own() { docker run --rm -v "$WORK:/w" alpine chown -R "$(id -u):$(id -g)" /w >/dev/null 2>&1 || true; }
+
 for mode in plain cloudflare; do
   D="$WORK/$mode"; mkdir -p "$D"
   if [ "$mode" = plain ]; then
@@ -17,6 +22,7 @@ for mode in plain cloudflare; do
   else
     gen "$D" 'n8n.example.ru\nд\nsocks5://u:secret@1.2.3.4:1080\nд\ntoken123\nд\nadmin@e.ru\nEurope/Moscow\nд\nн\n'
   fi
+  own
   ( cd "$D" && docker compose --project-directory . config --quiet ) \
     && echo "  режим $mode: compose валиден"
   docker run --rm -e CF_API_TOKEN=aBcDeF1234567890aBcDeF1234567890aBcDeF12 \
@@ -26,4 +32,4 @@ for mode in plain cloudflare; do
     && echo "  режим $mode: Caddyfile валиден" \
     || echo "  режим $mode: Caddyfile проверить не удалось (для Cloudflare нужен образ с плагином)"
 done
-rm -rf "$WORK"
+own; rm -rf "$WORK"
