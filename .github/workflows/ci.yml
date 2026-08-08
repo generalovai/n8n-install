@@ -1,0 +1,39 @@
+name: Проверка установщика
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Синтаксис install.sh
+        run: bash -n install.sh
+
+      - name: Shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning install.sh
+          # и все скрипты, которые установщик создаёт на сервере
+          mkdir -p /tmp/gen
+          for f in backup update restore autoupdate notify watch diagnose report; do
+            awk "/^cat > \"\\$DIR\/$f.sh\" <<'EOF'\$/{on=1;next} on&&\$0==\"EOF\"{exit} on" install.sh > /tmp/gen/$f.sh
+            test -s /tmp/gen/$f.sh || { echo "не найден $f.sh"; exit 1; }
+          done
+          shellcheck -S warning /tmp/gen/*.sh
+
+      - name: Сценарии установки
+        run: |
+          docker run --rm \
+            -v "$PWD/tests:/tests:ro" \
+            -v "$PWD/install.sh:/work/install.sh:ro" \
+            ubuntu:22.04 bash /tests/scenarios.sh | tee /tmp/out.txt
+          grep -q ПРОВАЛ /tmp/out.txt && { echo "есть провалившиеся сценарии"; exit 1; } || true
+
+      - name: Проверка compose и Caddyfile
+        run: bash tests/compose-check.sh

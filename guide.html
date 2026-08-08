@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Установка n8n на свой сервер — пошаговый гид</title>
+
+<style>
+  :root {
+    --ground:#FBFBFD; --paper:#FFFFFF; --sunken:#F1F3F8; --line:#E1E6EF;
+    --ink:#13161D; --ink-2:#4B5468; --ink-3:#798397;
+    --accent:#CE2B55; --accent-soft:#FCECF1; --accent-line:#F2C4D2;
+    --ok:#0B7355; --ok-soft:#E7F5F0;
+    --warn:#7A5200; --warn-soft:#FFF6E3; --warn-line:#EFDCB0;
+    --term-bg:#12151C; --term-ink:#DDE4F0; --term-dim:#79849A; --term-line:#262C38;
+    --shadow: 0 1px 2px rgba(19,22,29,.05), 0 8px 24px -16px rgba(19,22,29,.25);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0C0F14; --paper:#141822; --sunken:#1A1F2A; --line:#272E3C;
+      --ink:#E8ECF3; --ink-2:#A5AFC1; --ink-3:#788494;
+      --accent:#FF6F92; --accent-soft:#2B1820; --accent-line:#4A2632;
+      --ok:#43C79D; --ok-soft:#12241E;
+      --warn:#E5B96B; --warn-soft:#251E10; --warn-line:#3D3320;
+      --term-bg:#080A0F; --term-ink:#DDE4F0; --term-dim:#727E94; --term-line:#1E242F;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0C0F14; --paper:#141822; --sunken:#1A1F2A; --line:#272E3C;
+    --ink:#E8ECF3; --ink-2:#A5AFC1; --ink-3:#788494;
+    --accent:#FF6F92; --accent-soft:#2B1820; --accent-line:#4A2632;
+    --ok:#43C79D; --ok-soft:#12241E;
+    --warn:#E5B96B; --warn-soft:#251E10; --warn-line:#3D3320;
+    --term-bg:#080A0F; --term-ink:#DDE4F0; --term-dim:#727E94; --term-line:#1E242F;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+  :root[data-theme="light"] {
+    --ground:#FBFBFD; --paper:#FFFFFF; --sunken:#F1F3F8; --line:#E1E6EF;
+    --ink:#13161D; --ink-2:#4B5468; --ink-3:#798397;
+    --accent:#CE2B55; --accent-soft:#FCECF1; --accent-line:#F2C4D2;
+    --ok:#0B7355; --ok-soft:#E7F5F0;
+    --warn:#7A5200; --warn-soft:#FFF6E3; --warn-line:#EFDCB0;
+    --term-bg:#12151C; --term-ink:#DDE4F0; --term-dim:#79849A; --term-line:#262C38;
+    --shadow: 0 1px 2px rgba(19,22,29,.05), 0 8px 24px -16px rgba(19,22,29,.25);
+  }
+
+  * { box-sizing: border-box; }
+  img, svg { max-width: 100%; height: auto; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:820px; margin:0 auto; padding:0 20px 96px; }
+
+  /* ---------- шапка ---------- */
+  header.top { padding:56px 0 28px; }
+  .eyebrow {
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 14px;
+  }
+  h1 {
+    font-family:var(--mono); font-weight:600; font-size:clamp(27px,4.4vw,40px);
+    line-height:1.16; letter-spacing:-.02em; margin:0 0 14px; text-wrap:balance;
+  }
+  .lede { font-size:17.5px; color:var(--ink-2); margin:0; max-width:60ch; }
+
+  /* ---------- панель подстановки ---------- */
+  .panel {
+    margin:28px 0 8px;
+    background:var(--paper); border:1px solid var(--line); border-radius:12px;
+    box-shadow:var(--shadow);
+  }
+  .panel-head {
+    display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    padding:14px 18px 0;
+  }
+  .panel-head h2 {
+    font-family:var(--mono); font-size:12px; letter-spacing:.13em; text-transform:uppercase;
+    margin:0; color:var(--ink-2); font-weight:600;
+  }
+  .panel-head span { font-size:13px; color:var(--ink-3); }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:12px 18px 16px; }
+  @media (max-width:620px){ .fields { grid-template-columns:1fr; } }
+  .field { display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .field label {
+    font-size:12.5px; color:var(--ink-2); font-weight:600;
+  }
+  .field input {
+    font-family:var(--mono); font-size:14.5px; color:var(--ink);
+    background:var(--sunken); border:1px solid var(--line); border-radius:8px;
+    padding:9px 11px; width:100%; transition:border-color .12s, box-shadow .12s;
+  }
+  .field input:focus-visible {
+    outline:none; border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  .field .hint { font-size:12px; color:var(--ink-3); font-family:var(--mono); }
+  .field .hint.bad { color:var(--accent); }
+
+  .choices { border-top:1px solid var(--line); padding:14px 18px 6px; display:grid; gap:14px; }
+  @media (min-width:700px){ .choices { grid-template-columns:1fr 1fr; gap:18px; } }
+  .choice { display:flex; flex-direction:column; gap:7px; }
+  .choice-q { font-size:12.5px; color:var(--ink-2); font-weight:600; }
+  .seg { display:flex; gap:8px; flex-wrap:wrap; }
+  .seg label { cursor:pointer; }
+  .seg input { position:absolute; opacity:0; width:0; height:0; }
+  .seg span {
+    display:inline-block; padding:7px 13px; border-radius:8px;
+    border:1px solid var(--line); background:var(--sunken);
+    font-size:14px; color:var(--ink-2); transition:border-color .12s, color .12s, background .12s;
+  }
+  .seg input:checked + span {
+    border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600;
+  }
+  .seg input:focus-visible + span { outline:2px solid var(--accent); outline-offset:2px; }
+  .mode {
+    margin:0; padding:4px 18px 15px; font-size:13px; color:var(--ink-3);
+    font-family:var(--mono);
+  }
+  .mode b { color:var(--accent); font-weight:600; }
+
+  /* ---------- шаги ---------- */
+  .steps { margin-top:40px; }
+  .step {
+    position:relative; padding:0 0 34px 62px; border-left:1px solid var(--line); margin-left:17px;
+  }
+  .step:last-child { border-left-color:transparent; }
+  .step > .num {
+    position:absolute; left:-17px; top:0; width:34px; height:34px; border-radius:50%;
+    background:var(--paper); border:1px solid var(--accent-line); color:var(--accent);
+    font-family:var(--mono); font-size:13px; font-weight:600;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .step h3 {
+    font-family:var(--mono); font-size:19px; font-weight:600; letter-spacing:-.01em;
+    margin:3px 0 10px; line-height:1.3; text-wrap:balance;
+  }
+  .step p { margin:0 0 12px; color:var(--ink-2); }
+  .step p strong, li strong { color:var(--ink); font-weight:600; }
+  .step ul, .step ol { margin:0 0 12px; padding-left:20px; color:var(--ink-2); }
+  .step li { margin-bottom:6px; }
+  .step li::marker { color:var(--ink-3); }
+  @media (max-width:620px){ .step { padding-left:40px; } }
+
+  /* ---------- код ---------- */
+  .cmd { position:relative; margin:14px 0 16px; }
+  .cmd pre {
+    margin:0; background:var(--term-bg); color:var(--term-ink);
+    border:1px solid var(--term-line); border-radius:10px;
+    padding:14px 16px; overflow-x:auto;
+    font-family:var(--mono); font-size:13.5px; line-height:1.6;
+  }
+  .cmd pre .dim { color:var(--term-dim); }
+  .cmd pre .hl { color:#FF9BB4; }
+  /* Кнопка стоит под блоком, а не поверх него: длинные команды уходили
+     под неё и часть текста было не видно. */
+  .copy {
+    display:block; margin:7px 0 0 auto;
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-3); background:transparent;
+    border:1px solid var(--line); border-radius:6px; padding:5px 9px;
+    cursor:pointer; transition:color .12s, border-color .12s;
+  }
+  .copy:hover, .copy:focus-visible { color:var(--ink); border-color:var(--ink-3); outline:none; }
+  .copy:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .copy.done { color:var(--ok); border-color:var(--ok); }
+
+  /* ---------- таблица DNS ---------- */
+  .tablewrap { overflow-x:auto; margin:14px 0 16px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); }
+  th {
+    font-family:var(--mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:600; border-bottom-color:var(--ink-3);
+  }
+  td { font-family:var(--mono); color:var(--ink); font-variant-numeric:tabular-nums; }
+  tr:last-child td { border-bottom:none; }
+
+  /* ---------- провайдеры ---------- */
+  .hosts { display:grid; gap:12px; margin:16px 0; }
+  .host {
+    border:1px solid var(--line); border-radius:10px; padding:14px 16px; background:var(--paper);
+  }
+  .host.pick { border-color:var(--accent-line); background:var(--accent-soft); }
+  .host-top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
+  .host-name { font-family:var(--mono); font-size:15px; font-weight:600; color:var(--ink); }
+  .host-tag {
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--accent); border:1px solid var(--accent-line); border-radius:20px; padding:2px 8px;
+  }
+  .host-price {
+    font-family:var(--mono); font-size:13.5px; color:var(--ink-2);
+    font-variant-numeric:tabular-nums; margin-left:auto;
+  }
+  .host ul { margin:8px 0 0; padding-left:18px; font-size:14.5px; }
+  .host li { margin-bottom:4px; }
+  .pricenote { font-size:12.5px; color:var(--ink-3); margin:4px 0 0; }
+  @media (max-width:620px){
+    /* на узком экране цена переносится на свою строку - выравниваем по левому краю */
+    .host-price { margin-left:0; width:100%; }
+  }
+
+  /* ---------- врезки ---------- */
+  .note {
+    border-radius:10px; padding:13px 16px; margin:14px 0 16px; font-size:14.5px;
+    border:1px solid var(--line); background:var(--sunken); color:var(--ink-2);
+  }
+  .note.warn { background:var(--warn-soft); border-color:var(--warn-line); color:var(--warn); }
+  .note.key { background:var(--accent-soft); border-color:var(--accent-line); color:var(--ink); }
+  .note.ok { background:var(--ok-soft); border-color:transparent; color:var(--ok); }
+  .note b { color:inherit; }
+  .note .t {
+    display:block; font-family:var(--mono); font-size:11px; letter-spacing:.12em;
+    text-transform:uppercase; margin-bottom:5px; opacity:.85;
+  }
+
+  /* подставляемые значения */
+  .v { font-family:var(--mono); color:var(--accent); font-weight:600; word-break:break-all; }
+
+  /* ветки */
+  .branch { display:none; }
+  .branch.on { display:block; }
+
+  /* ---------- разбор ошибок ---------- */
+  .faq { margin-top:16px; border-top:1px solid var(--line); }
+  details {
+    border-bottom:1px solid var(--line);
+  }
+  details summary {
+    cursor:pointer; padding:14px 2px; font-weight:600; font-size:15.5px;
+    list-style:none; display:flex; gap:12px; align-items:flex-start;
+  }
+  details summary::-webkit-details-marker { display:none; }
+  details summary::before {
+    content:"+"; font-family:var(--mono); color:var(--accent); font-weight:600;
+    flex:none; width:14px;
+  }
+  details[open] summary::before { content:"–"; }
+  details summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  details .body { padding:0 0 16px 26px; color:var(--ink-2); font-size:15px; }
+  details .body p { margin:0 0 10px; }
+
+  h2.sec {
+    font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:600; margin:56px 0 4px;
+    padding-bottom:10px; border-bottom:1px solid var(--line);
+  }
+
+  footer.end {
+    margin-top:56px; padding-top:20px; border-top:1px solid var(--line);
+    font-size:13.5px; color:var(--ink-3);
+  }
+  a { color:var(--accent); text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:1px; }
+  a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <p class="eyebrow">Своя автоматизация · без подписок</p>
+    <h1>n8n на своём сервере за 10 минут</h1>
+    <p class="lede">
+      Одна команда — и на вашем сервере работает n8n с базой данных, шифрованием
+      и настоящим HTTPS. Скрипт всё спрашивает и делает сам. Эта страница нужна
+      для того, что делается вне терминала: домен, DNS и первый вход.
+    </p>
+  </header>
+
+  <section class="panel" aria-label="Ваши данные">
+    <div class="panel-head">
+      <h2>Ваши данные</h2>
+      <span>заполните один раз — и все команды ниже станут вашими</span>
+    </div>
+    <div class="fields">
+      <div class="field">
+        <label for="f-domain">Адрес для n8n</label>
+        <input id="f-domain" type="text" spellcheck="false" autocapitalize="off"
+               placeholder="n8n.мойсайт.ru" value="">
+        <span class="hint" id="h-domain">поддомен вашего домена</span>
+      </div>
+      <div class="field">
+        <label for="f-ip">IP-адрес сервера</label>
+        <input id="f-ip" type="text" spellcheck="false" inputmode="decimal"
+               placeholder="203.0.113.10" value="">
+        <span class="hint" id="h-ip">выдаёт хостинг при создании сервера</span>
+      </div>
+    </div>
+    <div class="choices">
+      <div class="choice">
+        <span class="choice-q">Где берёте домен?</span>
+        <div class="seg">
+          <label><input type="radio" name="reg" value="ru" checked><span>reg.ru или Beget</span></label>
+          <label><input type="radio" name="reg" value="cf"><span>Cloudflare</span></label>
+        </div>
+      </div>
+      <div class="choice">
+        <span class="choice-q">Где стоит сервер?</span>
+        <div class="seg">
+          <label><input type="radio" name="srv" value="ru" checked><span>в России</span></label>
+          <label><input type="radio" name="srv" value="eu"><span>за границей</span></label>
+        </div>
+      </div>
+    </div>
+    <p class="mode" id="mode-line"></p>
+  </section>
+
+  <div class="steps">
+
+    <!-- 1 -->
+    <section class="step">
+      <div class="num">1</div>
+      <h3>Арендуйте сервер</h3>
+      <p>Нужен VPS с <strong>Ubuntu 24.04</strong>, <strong>2 ядрами и 4 ГБ
+         оперативной памяти</strong>. Диска хватит 20–40 ГБ.</p>
+      <div class="note warn">
+        <span class="t">Не экономьте на памяти</span>
+        На 2 ГБ n8n ставится, но потом падает с ошибкой нехватки памяти — обычно в самый
+        неподходящий момент: когда ставите дополнительные ноды или обрабатываете файл.
+        Скрипт предупредит, если сервер слабее. Взять сразу 4 ГБ дешевле, чем переносить всё заново.
+      </div>
+      <p>Мы пользуемся тремя провайдерами. Выбор упирается в один вопрос:
+         <strong>есть ли у вас карта зарубежного банка.</strong></p>
+
+      <div class="hosts">
+        <div class="host">
+          <div class="host-top">
+            <span class="host-name">Beget</span>
+            <span class="host-tag">Россия</span>
+            <span class="host-price">2 ядра, 4 ГБ — ~990 ₽/мес</span>
+          </div>
+          <ul>
+            <li>Платить обычной российской картой, оплата <strong>посуточная</strong> —
+                подходящий сервер (2 ядра, 4 ГБ, 40 ГБ диска) выходит 33 ₽ в день.</li>
+            <li><strong>Домен там же</strong>: зона <code>.ru</code> — 199 ₽ за первый год.</li>
+            <li>Сервер в Петербурге, поэтому <strong>понадобится прокси</strong> для OpenAI и Telegram.</li>
+            <li>Есть локация в Казахстане, но она в наличии не всегда.</li>
+          </ul>
+        </div>
+
+        <div class="host pick">
+          <div class="host-top">
+            <span class="host-name">netcup</span>
+            <span class="host-tag">Германия · дешевле всех</span>
+            <span class="host-price">2 ядра, 4 ГБ — ~6 €/мес</span>
+          </div>
+          <ul>
+            <li>Тариф VPS 500: 2 ядра, 4 ГБ, <strong>128 ГБ</strong> диска — примерно 600 ₽.
+                Это в полтора раза дешевле Beget за ту же память и втрое больше диска.</li>
+            <li>Сервер в Европе — <strong>прокси не нужен вообще</strong>, всё работает напрямую.</li>
+            <li>Нужна <strong>карта зарубежного банка или PayPal</strong>: российские карты не проходят.</li>
+            <li>Регистрация строже: анкета заполняется <strong>латиницей</strong>, а при проверке
+                могут попросить документ с латинскими буквами — подойдёт загранпаспорт.
+                Сервер выдают не мгновенно.</li>
+            <li>Домен — <strong>любой</strong>, хоть <code>.ru</code> с reg.ru: регистратор домена
+                и провайдер сервера между собой никак не связаны.</li>
+          </ul>
+        </div>
+
+        <div class="host">
+          <div class="host-top">
+            <span class="host-name">justhost</span>
+            <span class="host-tag">компромисс</span>
+            <span class="host-price">2 ядра, 4 ГБ — считать на сайте</span>
+          </div>
+          <ul>
+            <li>Российская карта — и при этом <strong>можно выбрать европейскую локацию</strong>
+                (Франкфурт, Амстердам, Париж). Тогда прокси тоже не нужен.</li>
+            <li>Готового тарифа на 4 ГБ нет: нужную конфигурацию вы собираете сами на сайте,
+                там же сразу видно цену. Для ориентира: тариф с 2 ГБ стоит 720 ₽, 4 ГБ выйдут дороже.</li>
+            <li>При оплате сразу за год — скидка 20%.</li>
+            <li>Домен придётся покупать отдельно: у reg.ru или Beget, около 200 ₽ за <code>.ru</code>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="pricenote">Цены — на август 2026 года, они меняются; смотрите актуальные на сайтах провайдеров.</p>
+
+      <div class="note ok">
+        <span class="t">Как выбрать за десять секунд</span>
+        Есть зарубежная карта — берите <b>netcup</b>, это заметно дешевле и без прокси.
+        Нет карты, но не хочется возиться с прокси — <b>justhost</b> с европейской локацией.
+        Хочется всё в одном месте и подешевле, прокси не пугает — <b>Beget</b>, там же и домен.
+      </div>
+
+      <div class="note">
+        <span class="t">Что выбрать при заказе</span>
+        Провайдер попросит выбрать систему из списка. Нажмите просто
+        <b>Ubuntu 24.04</b> — без всяких приписок рядом. Если в списке есть строчки
+        вроде «Ubuntu + Docker» или «Ubuntu + ISPmanager», они не нужны: всё, что надо,
+        поставит сам скрипт. Если версии 24.04 нет, подойдёт любая новее — или 22.04.
+      </div>
+
+    </section>
+
+    <!-- 2 -->
+    <section class="step">
+      <div class="num">2</div>
+      <h3>Подключитесь к серверу по SSH</h3>
+      <p><strong>Windows:</strong> откройте PowerShell. <strong>macOS и Linux:</strong> откройте Терминал. Дальше одна команда:</p>
+      <div class="cmd">
+        <pre><code id="c-ssh">ssh root@ВАШ_IP</code></pre>
+        <button class="copy" data-for="c-ssh">Копировать</button>
+      </div>
+      <p>Первый раз он спросит <code>Are you sure you want to continue connecting</code> —
+         напишите <strong>yes</strong> целиком и нажмите Enter. Одной буквы <code>y</code>
+         недостаточно: ssh её не примет и переспросит.</p>
+      <p>Затем введите пароль root. При вводе пароля <strong>на экране ничего не появляется</strong> —
+         ни звёздочек, ни точек. Это нормально, просто наберите вслепую и нажмите Enter.</p>
+    </section>
+
+    <!-- 3 -->
+    <section class="step">
+      <div class="num">3</div>
+      <h3>Купите домен</h3>
+      <p>Без домена не будет HTTPS, а без HTTPS n8n не сможет нормально работать
+         с большинством сервисов. Есть два варианта, и от вашего выбора зависят
+         следующие шаги — отметьте его в панели выше.</p>
+
+      <div class="hosts">
+        <div class="host">
+          <div class="host-top">
+            <span class="host-name">reg.ru или Beget</span>
+            <span class="host-tag">российская карта</span>
+            <span class="host-price">~200 ₽ в год</span>
+          </div>
+          <ul>
+            <li>Зона <code>.ru</code> — около 200 ₽ за первый год, платить обычной картой.</li>
+            <li>Одну запись в панели домена нужно будет создать руками — это пара полей,
+                и на следующем шаге показано, что именно вписать.</li>
+            <li>Подходит для любого сервера, в том числе для netcup в Германии.</li>
+          </ul>
+        </div>
+
+        <div class="host">
+          <div class="host-top">
+            <span class="host-name">Cloudflare</span>
+            <span class="host-tag">зарубежная карта</span>
+            <span class="host-price">~10 $ в год</span>
+          </div>
+          <ul>
+            <li>Зона <code>.com</code> около 10 $ в год, по себестоимости без наценки.
+                Зоны <code>.ru</code> там нет.</li>
+            <li><strong>Ничего создавать руками не нужно</strong> — скрипт пропишет всё сам.
+                От вас потребуется только скопировать один ключ из Cloudflare.</li>
+            <li>Этот способ надёжнее: он срабатывает даже там, где обычный почему-то не проходит.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>Домен покупается целиком, а n8n будет жить на его поддомене — например
+         <span class="v" data-v="domain">n8n.мойсайт.ru</span>.</p>
+
+      <div class="note ok">
+        <span class="t">Домен и сервер между собой не связаны</span>
+        Можно взять сервер в Германии, а домен <b>.ru</b> на reg.ru — это обычная рабочая
+        связка. Провайдер сервера не диктует, где покупать домен.
+      </div>
+      <div class="note warn">
+        <span class="t">Только латиница</span>
+        Домены в зоне <b>.рф</b> и другие кириллические брать не стоит: на такие адреса
+        бесплатный сертификат выдаётся не всегда. Берите обычный, например <b>мойсайт.ru</b>.
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="step">
+      <div class="num">4</div>
+      <h3>Направьте домен на сервер</h3>
+
+      <!-- ветка: домен на reg.ru / Beget -->
+      <div class="branch on" data-branch="plain">
+        <p>Зайдите в панель управления доменом: на reg.ru это раздел
+           <strong>«Управление зоной DNS»</strong>, на Beget — <strong>«Домены»</strong>.
+           Создайте там одну запись:</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Тип</th><th>Имя (субдомен)</th><th>Значение</th></tr></thead>
+            <tbody><tr>
+              <td>A</td>
+              <td><span class="v" data-v="recname">n8n</span></td>
+              <td><span class="v" data-v="ip">203.0.113.10</span></td>
+            </tr></tbody>
+          </table>
+        </div>
+        <p>Всё, больше ничего делать не нужно. Запись расходится по интернету за 5–30 минут,
+           скрипт сам подождёт и проверит её.</p>
+        <div class="note">
+          <span class="t">Если сайт так и не открылся</span>
+          Редко, но бывает: провайдер не пропускает нужный трафик, и сертификат
+          не выдаётся. Тогда домен можно бесплатно подключить к Cloudflare — заведите
+          там аккаунт и нажмите <b>Add a domain</b>, дальше он сам покажет, что вписать
+          у регистратора. После этого выберите наверху вариант «Cloudflare»
+          и пройдите этот шаг заново.
+        </div>
+      </div>
+
+      <!-- ветка: домен куплен в Cloudflare -->
+      <div class="branch" data-branch="cf">
+        <p>Раз домен куплен в Cloudflare, его DNS уже там — <strong>создавать записи руками
+           не нужно</strong>. Нужен только ключ доступа, чтобы скрипт сделал всё сам.</p>
+        <ol>
+          <li>Откройте <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">страницу ключей</a>
+              (в Cloudflare она называется API Tokens) и нажмите <strong>Create Token</strong>.</li>
+          <li>Найдите шаблон <strong>Edit zone DNS</strong> и нажмите рядом <strong>Use template</strong>.</li>
+          <li>В разделе <strong>Zone Resources</strong> выберите из списка свой домен.</li>
+          <li><strong>Continue to summary</strong> → <strong>Create Token</strong>.</li>
+          <li>Скопируйте показанный ключ и держите под рукой — скрипт спросит его.
+              Показывается он один раз.</li>
+        </ol>
+        <div class="note ok">
+          <span class="t">Что дальше сделает скрипт</span>
+          Спросит этот ключ, сам найдёт домен, сам создаст запись
+          <b><span class="v" data-v="domain">n8n.мойсайт.ru</span></b> → <b><span class="v" data-v="ip">203.0.113.10</span></b>
+          и получит сертификат. В панель Cloudflare заходить больше не придётся.
+        </div>
+        <div class="note warn">
+          <span class="t">Про оранжевое облако</span>
+          Скрипт спросит, включать ли его. По умолчанию — нет: на бесплатном тарифе
+          Cloudflare не пропустит файлы больше 100 МБ, а для n8n это часто мешает.
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 прокси -->
+    <section class="step branch" data-branch="proxy">
+      <div class="num">5</div>
+      <h3>Приготовьте прокси</h3>
+      <p>Прокси нужен, только если сервер стоит в России — например, вы взяли
+         <strong>Beget</strong>. Без него не скачаются образы и ноды не смогут ходить
+         в OpenAI, Telegram и другие зарубежные сервисы.</p>
+      <p>Если сервер за границей — прокси не нужен: отметьте это наверху,
+         и шаг пропадёт.</p>
+      <p>Подойдёт любой платный прокси. Скрипт спросит адрес в одном из двух видов:</p>
+      <div class="cmd">
+        <pre><code><span class="dim"># обычный HTTP-прокси</span>
+http://логин:пароль@адрес:порт
+
+<span class="dim"># или socks5 — скрипт сам поднимет для него мост</span>
+socks5://логин:пароль@адрес:порт</code></pre>
+      </div>
+      <p>Скрипт сразу проверит, что через этот прокси есть интернет, а в самом конце покажет,
+         с какого адреса n8n выходит наружу — так вы точно увидите, что прокси работает.</p>
+      <div class="note warn">
+        <span class="t">Если в пароле есть символ @</span>
+        Если в пароле прокси есть символ <b>@</b> — смените пароль в личном кабинете прокси.
+        Такой пароль технически не проходит. Символ <b>$</b> — можно, скрипт с ним справляется.
+      </div>
+    </section>
+
+    <!-- 6 запуск -->
+    <section class="step">
+      <div class="num" data-num="run">6</div>
+      <h3>Запустите установку</h3>
+      <p>Вставьте эту команду в терминал сервера и нажмите Enter:</p>
+      <div class="cmd">
+        <pre><code id="c-install">sudo bash &lt;(curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh)</code></pre>
+        <button class="copy" data-for="c-install">Копировать</button>
+      </div>
+      <p>Дальше скрипт спросит по-русски: адрес для n8n, нужен ли прокси, где DNS,
+         вашу почту и часовой пояс. На всё остальное он ответит сам.</p>
+      <div class="note">
+        <span class="t">Заодно предложит уведомления</span>
+        Скрипт спросит, присылать ли сообщения в Telegram. Если согласитесь, нужен будет
+        токен бота: откройте в Telegram <b>@BotFather</b>, отправьте <b>/newbot</b> и следуйте
+        подсказкам — он выдаст длинную строку, её и вставите. Свой ID искать не нужно:
+        скрипт попросит написать боту и определит вас сам.
+      </div>
+      <div class="note">
+        <span class="t">Сколько ждать</span>
+        5–10 минут. Дольше всего скачиваются образы и выдаётся сертификат.
+        Не закрывайте терминал.
+      </div>
+      <div class="note">
+        <span class="t">Если что-то оборвалось</span>
+        Просто запустите ту же команду ещё раз. Скрипт продолжит с места остановки
+        и не сломает то, что уже сделано.
+      </div>
+    </section>
+
+    <!-- 7 ключ -->
+    <section class="step">
+      <div class="num" data-num="key">7</div>
+      <h3>Сохраните ключ шифрования</h3>
+      <p>В самом конце скрипт покажет крупный ключ в красной рамке. Это единственный шаг,
+         где ошибка необратима.</p>
+      <div class="note key">
+        <span class="t">Почему это важно</span>
+        Этим ключом зашифрованы <b>все ваши доступы</b>: токен Telegram-бота, ключ OpenAI,
+        пароли к почте. Без ключа восстановить n8n из резервной копии <b>невозможно</b> —
+        сценарии вернутся, а все подключения придётся создавать заново.
+      </div>
+      <p>Скопируйте его в заметки, менеджер паролей или отправьте себе в сохранённые сообщения.
+         Сделайте это сразу, не откладывая.</p>
+    </section>
+
+    <!-- 8 первый вход -->
+    <section class="step">
+      <div class="num" data-num="login">8</div>
+      <h3>Создайте аккаунт владельца</h3>
+      <p>Откройте в браузере:</p>
+      <div class="cmd">
+        <pre><code id="c-url">https://ваш-адрес</code></pre>
+        <button class="copy" data-for="c-url">Копировать</button>
+      </div>
+      <p>Откроется форма регистрации. <strong>Заполните её прямо сейчас:</strong> пока аккаунт
+         владельца не создан, занять ваш n8n может любой, кто знает адрес. Сразу после входа
+         включите двухфакторную аутентификацию в настройках.</p>
+      <div class="note warn">
+        <span class="t">Браузер ругается на сертификат?</span>
+        Значит он ещё не выдался. Подождите 10–30 минут — Caddy получит его сам,
+        перезапускать ничего не нужно.
+      </div>
+    </section>
+
+    <!-- 9 дальше -->
+    <section class="step">
+      <div class="num" data-num="day2">9</div>
+      <h3>Что делать дальше</h3>
+      <p>Дальше сервер работает сам. Каждую ночь происходят две вещи:</p>
+      <ul>
+        <li><strong>В 2:00</strong> — проверка обновлений. Если вышла новая версия n8n,
+            сервер сначала сделает копию, потом обновится и убедится, что всё поднялось.
+            Если новая версия не запустится, он <strong>сам вернёт прежнюю</strong> вместе
+            с данными и оставит записку в файле
+            <code>/opt/n8n/ОБНОВЛЕНИЕ-НЕ-УДАЛОСЬ.txt</code>.</li>
+        <li><strong>В 3:30</strong> — резервная копия. Хранятся последние 14.</li>
+      </ul>
+      <p>Если вы включили уведомления, обо всём важном придёт сообщение в Telegram:
+         обновились, обновление не удалось и версию вернули, не сделалась копия,
+         кончается место, n8n перестал отвечать. Ежедневных «всё хорошо» не будет.</p>
+      <p>Всё остальное — только по необходимости:</p>
+      <div class="cmd">
+        <pre><code id="c-day2"><span class="dim"># обновить прямо сейчас, не дожидаясь ночи</span>
+/opt/n8n/update.sh
+
+<span class="dim"># сделать копию прямо сейчас</span>
+/opt/n8n/backup.sh
+
+<span class="dim"># восстановиться из копии (без аргументов покажет список)</span>
+/opt/n8n/restore.sh
+
+<span class="dim"># посмотреть, что происходит внутри</span>
+cd /opt/n8n &amp;&amp; docker compose logs -f n8n
+
+<span class="dim"># собрать отчёт о состоянии, если нужна помощь (паролей в нём нет)</span>
+/opt/n8n/diagnose.sh</code></pre>
+        <button class="copy" data-for="c-day2">Копировать</button>
+      </div>
+      <div class="note">
+        <span class="t">Чтобы узнать, даже если сервер умрёт целиком</span>
+        Сообщения выше присылает сам сервер. Если он выключится или у провайдера пропадёт
+        сеть, писать будет некому. Это закрывается бесплатным сторонним сторожем, три минуты:
+        <ol>
+          <li>Зарегистрируйтесь на <a href="https://uptimerobot.com" target="_blank" rel="noopener">uptimerobot.com</a> — бесплатно, до 50 проверок.</li>
+          <li>Нажмите <b>Add New Monitor</b>, тип — <b>HTTP(s)</b>.</li>
+          <li>Имя — любое, например n8n. Адрес — <code>https://<span class="v" data-v="domain">n8n.мойсайт.ru</span>/healthz</code></li>
+          <li>Интервал — <b>5 минут</b> (это максимум на бесплатном тарифе), отметьте свою почту в списке оповещений.</li>
+          <li><b>Create Monitor</b>.</li>
+        </ol>
+        Теперь ваш адрес проверяют снаружи каждые 5 минут, и если он не отвечает — придёт письмо.
+        Заодно проверяется всё разом: домен, сертификат и сам n8n.
+      </div>
+      <div class="note">
+        <span class="t">Если не хотите ночных обновлений</span>
+        Выключить их можно одной командой: <code>rm /etc/cron.d/n8n-update</code>.
+        Тогда обновляйтесь сами, когда удобно — командой <code>/opt/n8n/update.sh</code>,
+        она делает ровно то же самое, включая копию и откат при неудаче.
+      </div>
+      <div class="note">
+        <span class="t">Важно про копии</span>
+        Они лежат на том же сервере, в <code>/opt/n8n/backups</code>. Если сервер пропадёт —
+        пропадут и они. Раз в месяц скачивайте свежую копию себе на компьютер.
+      </div>
+    </section>
+
+  </div>
+
+  <h2 class="sec">Если что-то пошло не так</h2>
+  <div class="faq">
+
+    <details>
+      <summary>Сайт не открывается, браузер пишет про сертификат</summary>
+      <div class="body">
+        <p>Почти всегда дело в DNS: A-запись ещё не разошлась или указывает не туда.
+           Подождите 10–30 минут — сертификат выдастся сам.</p>
+        <p>Если прошёл час, посмотрите, что говорит Caddy:</p>
+        <div class="cmd"><pre><code id="c-caddy">cd /opt/n8n &amp;&amp; docker compose logs caddy | tail -30</code></pre>
+        <button class="copy" data-for="c-caddy">Копировать</button></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Скрипт написал, что домен указывает не на этот сервер</summary>
+      <div class="body">
+        <p>Проверьте в панели домена, что в A-записи стоит именно
+           <span class="v" data-v="ip">203.0.113.10</span>, и что имя записи —
+           <span class="v" data-v="recname">n8n</span>, а не что-то другое.</p>
+        <p>Частая ошибка: запись создали в другом домене или добавили лишнюю точку в конце.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Cloudflare не принимает токен или не находит домен</summary>
+      <div class="body">
+        <p>Пересоздайте токен строго по шаблону <strong>Edit zone DNS</strong> и убедитесь,
+           что в <strong>Zone Resources</strong> выбран именно ваш домен, а не «All zones»
+           из другого аккаунта.</p>
+        <p>Второе по частоте: домен добавлен в Cloudflare, но NS-серверы в reg.ru ещё не
+           поменяли, и Cloudflare показывает его как неактивный.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Ноды не могут подключиться к OpenAI или Telegram</summary>
+      <div class="body">
+        <p>Если сервер в России — нужен прокси. Запустите установщик заново и на шаге
+           про прокси укажите его адрес: дальше скрипт пропишет прокси везде, где нужно.</p>
+        <p>Проверить, работает ли он: сделайте ноду HTTP Request на адрес
+           <code>https://api.ipify.org</code>. Она должна показать IP прокси, а не IP сервера.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Установка оборвалась на середине</summary>
+      <div class="body">
+        <p>Запустите ту же команду ещё раз. Скрипт написан так, что повторный запуск безопасен:
+           ключ шифрования и пароли он возьмёт из уже созданного файла, а не сгенерирует новые.</p>
+        <p>Если ошибка повторяется — в конце сообщения указан путь к подробному логу
+           <code>/var/log/n8n-install.log</code>.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Я потерял ключ шифрования</summary>
+      <div class="body">
+        <p>Пока сервер жив — ключ лежит в файле <code>/opt/n8n/.env</code>, посмотреть можно так:</p>
+        <div class="cmd"><pre><code id="c-key">grep N8N_ENCRYPTION_KEY /opt/n8n/.env</code></pre>
+        <button class="copy" data-for="c-key">Копировать</button></div>
+        <p>Если сервер уже потерян, а ключа нигде нет — доступы восстановить нельзя,
+           их придётся создать заново. Сценарии при этом сохранятся.</p>
+      </div>
+    </details>
+
+  </div>
+
+  <footer class="end">
+    Скрипт сам ставит всё необходимое, закрывает сервер от посторонних и настраивает
+    ночные резервные копии. Из интернета доступен только ваш сайт с n8n — база данных
+    наружу не смотрит.
+  </footer>
+</div>
+
+<script>
+(function () {
+  var REPO = "https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh";
+
+  var dEl = document.getElementById("f-domain"),
+      iEl = document.getElementById("f-ip"),
+
+      hD = document.getElementById("h-domain"),
+      hI = document.getElementById("h-ip");
+
+  var PH_DOMAIN = "n8n.мойсайт.ru", PH_IP = "203.0.113.10";
+
+  function pick(name) {
+    var el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : "ru";
+  }
+  function setPick(name, val) {
+    var el = document.querySelector('input[name="' + name + '"][value="' + val + '"]');
+    if (el) el.checked = true;
+  }
+
+  function store(k, v) { try { localStorage.setItem("n8ng_" + k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem("n8ng_" + k) || ""; } catch (e) { return ""; } }
+
+  function cleanDomain(s) {
+    s = (s || "").trim().toLowerCase();
+    s = s.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
+    return s.replace(/\s+/g, "");
+  }
+  function validDomain(s) { return /^[a-z0-9а-яё-]+(\.[a-z0-9а-яё-]+)+$/i.test(s); }
+  function validIp(s) {
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) return false;
+    return s.split(".").every(function (p) { return +p >= 0 && +p <= 255; });
+  }
+  // Имя записи: у домена без поддомена в панели пишут @
+  function recName(d) {
+    var parts = d.split(".");
+    return parts.length <= 2 ? "@" : parts[0];
+  }
+
+  function render() {
+    var dRaw = cleanDomain(dEl.value), iRaw = (iEl.value || "").trim();
+    var dOk = validDomain(dRaw), iOk = validIp(iRaw);
+    var d = dOk ? dRaw : PH_DOMAIN, ip = iOk ? iRaw : PH_IP;
+
+    hD.textContent = dRaw && !dOk ? "похоже на опечатку — нужен вид n8n.мойсайт.ru" : "поддомен вашего домена";
+    hD.className = "hint" + (dRaw && !dOk ? " bad" : "");
+    hI.textContent = iRaw && !iOk ? "IP состоит из четырёх чисел через точку" : "выдаёт хостинг при создании сервера";
+    hI.className = "hint" + (iRaw && !iOk ? " bad" : "");
+
+    document.querySelectorAll('[data-v="domain"]').forEach(function (n) { n.textContent = d; });
+    document.querySelectorAll('[data-v="ip"]').forEach(function (n) { n.textContent = ip; });
+    document.querySelectorAll('[data-v="recname"]').forEach(function (n) { n.textContent = recName(d); });
+
+    document.getElementById("c-ssh").textContent = "ssh root@" + ip;
+    document.getElementById("c-url").textContent = "https://" + d;
+    document.getElementById("c-install").textContent = "sudo bash <(curl -sSL " + REPO + ")";
+
+    var cf = pick("reg") === "cf";      // домен куплен в Cloudflare -> DNS уже там
+    var needProxy = pick("srv") === "ru"; // сервер в России -> нужен прокси
+    document.querySelector('[data-branch="plain"]').classList.toggle("on", !cf);
+    document.querySelector('[data-branch="cf"]').classList.toggle("on", cf);
+    document.querySelector('[data-branch="proxy"]').classList.toggle("on", needProxy);
+
+    // сквозная нумерация: шаг про прокси может быть скрыт
+    var n = needProxy ? 5 : 4;
+    ["run", "key", "login", "day2"].forEach(function (id) {
+      document.querySelector('[data-num="' + id + '"]').textContent = ++n;
+    });
+
+    document.getElementById("mode-line").innerHTML =
+      "Дальше на странице: <b>" + (cf ? "домен настраивается токеном Cloudflare" : "запись создаёте руками") +
+      "</b> · <b>" + (needProxy ? "шаг про прокси показан" : "прокси не нужен") + "</b>";
+
+    store("domain", dEl.value); store("ip", iEl.value);
+    store("reg", pick("reg")); store("srv", pick("srv"));
+  }
+
+  dEl.value = load("domain"); iEl.value = load("ip");
+  setPick("reg", load("reg") || "ru");
+  setPick("srv", load("srv") || "ru");
+  [dEl, iEl].forEach(function (el) { el.addEventListener("input", render); });
+  document.querySelectorAll('.seg input').forEach(function (el) {
+    el.addEventListener("change", render);
+  });
+  render();
+
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var src = document.getElementById(btn.dataset.for);
+      var text = src.textContent;
+      var done = function () {
+        btn.textContent = "Скопировано"; btn.classList.add("done");
+        setTimeout(function () { btn.textContent = "Копировать"; btn.classList.remove("done"); }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        document.body.removeChild(ta); done();
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
