@@ -426,9 +426,17 @@ step "Шаг 2 из 10. Прокси для зарубежных сервисо�
 
 PROXY_URL="$(env_unesc "$(env_get PROXY_URL || true)")"
 if [ -n "$PROXY_URL" ]; then
-  ok "В прошлой установке был указан прокси - оставляем его"
-  ask_yes "Изменить или убрать прокси?" "n" && PROXY_URL=""
-  NEED_PROXY_Q=$([ -z "$PROXY_URL" ] && echo да || echo нет)
+  # Раньше здесь был вопрос "изменить или убрать?" - после него было непонятно,
+  # что вообще произошло с прокси. Теперь спрашиваем прямо.
+  say "  С прошлой установки сохранён прокси: $B$(mask_proxy "$PROXY_URL")$R"
+  if ask_yes "Оставить его?" "y"; then
+    ok "Оставляем прежний прокси"
+    NEED_PROXY_Q=нет
+  else
+    PROXY_URL=""
+    say "  Хорошо, прежний прокси убран."
+    NEED_PROXY_Q=да
+  fi
 else
   NEED_PROXY_Q=да
 fi
@@ -448,7 +456,7 @@ if [ "$NEED_PROXY_Q" = "да" ]; then
     socks5://логин:пароль@адрес:порт   (подойдёт и без логина с паролем)
 
 TXT
-  if ask_yes "Настроить прокси?" "n"; then
+  if ask_yes "Использовать прокси?" "n"; then
     ask_proxy
   fi
 fi
