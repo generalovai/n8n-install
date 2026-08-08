@@ -1,0 +1,274 @@
+{
+  "id": "n8nCheckServer01",
+  "name": "Проверка сервера - начните отсюда",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "id": "48d887c4-eea1-4434-938c-3cbdc5c9f102",
+      "name": "Нажмите Test workflow"
+    },
+    {
+      "parameters": {
+        "url": "https://api.ipify.org",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        220,
+        300
+      ],
+      "id": "7ca695c7-fc38-4fc3-8e65-2469852f2756",
+      "name": "Мой адрес в интернете",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notes": "Показывает, с какого адреса сервер выходит в интернет",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        440,
+        300
+      ],
+      "id": "6aa72580-ce71-4c57-8628-43a0b1457cee",
+      "name": "Google Gemini",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/models",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        660,
+        300
+      ],
+      "id": "803cae72-1a0e-4147-abbb-17c0c14a3333",
+      "name": "OpenAI",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/models",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        880,
+        300
+      ],
+      "id": "aa8aa5d0-67e5-48b6-ad57-6e55e690e040",
+      "name": "ElevenLabs",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.telegram.org/bot0:0/getMe",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1100,
+        300
+      ],
+      "id": "6eb30c36-0e72-436e-bafe-69a0c2b36b3f",
+      "name": "Telegram",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/models",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1320,
+        300
+      ],
+      "id": "89702f34-c148-4bc4-8705-e38aa263d791",
+      "name": "Anthropic",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Собираем всё в одну понятную таблицу.\nconst check = (name, comment) => {\n  let item;\n  try { item = $(name).item.json; } catch (e) { item = null; }\n  if (!item)                    return { сервис: name, статус: 'нет данных', подробности: comment };\n  if (item.error)               return { сервис: name, статус: 'НЕ ДОСТУЧАЛИСЬ', подробности: String(item.error).slice(0, 80) };\n  const code = item.statusCode;\n  if (code === undefined)       return { сервис: name, статус: 'нет данных', подробности: comment };\n  // Для этих сервисов 401/403 без ключа - это ХОРОШО: значит сервер ответил.\n  const ok = code >= 200 && code < 500;\n  return { сервис: name, статус: ok ? 'работает' : 'ошибка', ответ: code, подробности: comment };\n};\n\nconst ipItem = (() => { try { return $('Мой адрес в интернете').item.json; } catch (e) { return null; } })();\nconst ip = ipItem && ipItem.body ? String(ipItem.body).trim() : 'не удалось узнать';\n\nconst rows = [\n  { сервис: 'Мой адрес в интернете', статус: ip, подробности: 'если стоит прокси - здесь должен быть его адрес, не адрес сервера' },\n  check('Google Gemini',  'ключ не нужен: 401 или 403 значит сервер доступен'),\n  check('OpenAI',         'ключ не нужен: 401 значит сервер доступен'),\n  check('ElevenLabs',     'ключ не нужен: 401 значит сервер доступен'),\n  check('Telegram',       '404 - это нормально, значит сервер доступен'),\n  check('Anthropic',      'ключ не нужен: 401 значит сервер доступен'),\n];\n\nconst плохие = rows.filter(r => r.статус === 'НЕ ДОСТУЧАЛИСЬ').map(r => r.сервис);\nrows.push({\n  сервис: 'ИТОГ',\n  статус: плохие.length ? 'есть проблемы' : 'всё доступно',\n  подробности: плохие.length\n    ? 'Не отвечают: ' + плохие.join(', ') + '. Если сервер в России - проверьте прокси: он должен быть указан при установке.'\n    : 'Все сервисы отвечают. Можно подключать ключи и работать.'\n});\n\nreturn rows.map(json => ({ json }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "id": "7729473e-a524-4ad9-b68b-49e4640c9b52",
+      "name": "Сводка"
+    },
+    {
+      "parameters": {
+        "content": "## Проверка сервера\n\nНажмите **Test workflow** внизу.\n\nВоркфлоу проверит, до каких сервисов дотягивается ваш n8n.\nКлючи и доступы для этого не нужны: ответ 401 означает\n\"сервер на связи, но не представились\" - для проверки этого достаточно.\n\nСмотрите строку ИТОГ в результате последней ноды.",
+        "height": 260,
+        "width": 460,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -40
+      ],
+      "id": "042fd81c-db86-4546-8e80-60a31cf68931",
+      "name": "Пояснение"
+    }
+  ],
+  "connections": {
+    "Нажмите Test workflow": {
+      "main": [
+        [
+          {
+            "node": "Мой адрес в интернете",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Мой адрес в интернете": {
+      "main": [
+        [
+          {
+            "node": "Google Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini": {
+      "main": [
+        [
+          {
+            "node": "OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI": {
+      "main": [
+        [
+          {
+            "node": "ElevenLabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram": {
+      "main": [
+        [
+          {
+            "node": "Anthropic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic": {
+      "main": [
+        [
+          {
+            "node": "Сводка",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

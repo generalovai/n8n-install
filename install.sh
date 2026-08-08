@@ -175,6 +175,9 @@ ask_proxy() {   # спрашивает адрес прокси и проверя
 # на середине, при повторном запуске не придётся вводить всё заново.
 write_env() {
   mkdir -p "$DIR"
+  # umask меняем только на время записи .env и сразу возвращаем: иначе все
+  # папки, созданные дальше, получают права 700 и контейнеры в них не войдут
+  local _old_umask; _old_umask="$(umask)"
   umask 077
   {
     echo "# Создано установщиком n8n v$INST_VER, $(date '+%F %T')"
@@ -212,6 +215,7 @@ write_env() {
     echo "POSTGRES_NON_ROOT_PASSWORD=$POSTGRES_NON_ROOT_PASSWORD"
   } > "$ENV_FILE"
   chmod 600 "$ENV_FILE"
+  umask "$_old_umask"
 }
 
 
@@ -1035,6 +1039,13 @@ ok "Фаервол настроен"
 step "Шаг 9 из 10. Создаём файлы n8n в $DIR"
 
 mkdir -p "$DIR/caddy_config" "$DIR/local_files" "$DIR/backups" "$DIR/caddy_build" "$DIR/proxy_bridge"
+# Права задаём явно, а не полагаемся на umask: n8n внутри контейнера работает
+# под пользователем node (uid 1000) и должен читать эти папки, а в local_files
+# ещё и писать.
+chmod 755 "$DIR" "$DIR/caddy_config" "$DIR/caddy_build" "$DIR/proxy_bridge"
+chmod 700 "$DIR/backups"
+chown -R 1000:1000 "$DIR/local_files" 2>/dev/null || true
+chmod 755 "$DIR/local_files"
 
 write_env
 ok "Файл настроек .env создан (доступ только для root)"
@@ -1286,6 +1297,7 @@ cat >> "$COMPOSE" <<'EOF'
     volumes:
       - n8n_data:/home/node/.n8n
       - ${DATA_FOLDER}/local_files:/files
+      - ${DATA_FOLDER}/workflows:/workflows:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -1548,6 +1560,61 @@ log "подробности записаны в $ALERT"
 exit 1
 EOF
 chmod +x "$DIR/autoupdate.sh"
+
+# --- готовые воркфлоу -------------------------------------------------------
+# Кладём файлы и заводим импорт, который сработает сам, как только человек
+# создаст учётную запись владельца: до этого момента n8n не к кому их привязать.
+mkdir -p "$DIR/workflows"
+WF_BASE="https://raw.githubusercontent.com/generalovai/n8n-install/main/workflows"
+WF_LIST="01-proverka-servera.json"   # сюда добавляются новые готовые воркфлоу
+# shellcheck disable=SC2086
+for wf in $WF_LIST; do
+  pcurl -fsSL --max-time 60 "$WF_BASE/$wf" -o "$DIR/workflows/$wf" 2>/dev/null \
+    || warn "Не удалось скачать готовый воркфлоу $wf - не страшно, всё остальное работает"
+done
+chmod 644 "$DIR"/workflows/*.json 2>/dev/null || true
+
+cat > "$DIR/import-workflows.sh" <<'EOF'
+#!/usr/bin/env bash
+# Кладёт готовые воркфлоу в n8n. Пока владелец не создан, привязывать их не к кому,
+# поэтому скрипт молча ждёт и пробует снова - его запускает cron раз в 5 минут.
+set -uo pipefail
+DIR=/opt/n8n
+DONE="$DIR/.workflows-imported"
+cd "$DIR" || exit 0
+[ -f "$DONE" ] && exit 0
+ls "$DIR"/workflows/*.json >/dev/null 2>&1 || exit 0
+
+OWNER="$(docker compose exec -T postgres psql -U postgres -d n8n -tAc \
+  'select id from "user" where email is not null order by "createdAt" limit 1' 2>/dev/null | tr -d '\r ')"
+[ -n "$OWNER" ] || exit 0        # аккаунт ещё не создан - подождём
+
+for f in "$DIR"/workflows/*.json; do
+  docker compose exec -T n8n n8n import:workflow \
+    --input="/files/../workflows/$(basename "$f")" --userId="$OWNER" >/dev/null 2>&1 \
+  || docker compose exec -T n8n n8n import:workflow \
+    --input="/workflows/$(basename "$f")" --userId="$OWNER" >/dev/null 2>&1 || true
+done
+
+touch "$DONE"
+rm -f /etc/cron.d/n8n-workflows
+"$DIR/notify.sh" "В вашем n8n появились готовые воркфлоу
+
+Откройте список - там есть «Проверка сервера». Запустите его кнопкой
+Test workflow: он покажет, до каких сервисов дотягивается ваш n8n
+и с какого адреса он выходит в интернет. Ключи для этого не нужны."
+EOF
+chmod +x "$DIR/import-workflows.sh"
+
+cat > /etc/cron.d/n8n-workflows <<'EOF'
+# Разложить готовые воркфлоу, как только появится учётная запись владельца.
+# Задание убирает само себя, когда справится.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/5 * * * * root /opt/n8n/import-workflows.sh >/dev/null 2>&1
+EOF
+chmod 644 /etc/cron.d/n8n-workflows
+ok "Готовые воркфлоу появятся сразу после создания учётной записи"
 
 # --- notify.sh ---------------------------------------------------------------
 cat > "$DIR/notify.sh" <<'EOF'
