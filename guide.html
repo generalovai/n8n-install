@@ -310,6 +310,13 @@
         </div>
       </div>
       <div class="choice">
+        <span class="choice-q">Ваш компьютер</span>
+        <div class="seg">
+          <label><input type="radio" name="os" value="win" checked><span>Windows</span></label>
+          <label><input type="radio" name="os" value="mac"><span>Mac или Linux</span></label>
+        </div>
+      </div>
+      <div class="choice">
         <span class="choice-q">Где стоит сервер?</span>
         <div class="seg">
           <label><input type="radio" name="srv" value="ru" checked><span>в России</span></label>
@@ -416,22 +423,48 @@
       <div class="num">2</div>
       <h3>Подключитесь к серверу по SSH</h3>
 
-      <p><strong>На Windows</strong> откройте приложение <strong>«Терминал»</strong>
-         (Windows Terminal). В Windows 11 оно уже стоит: нажмите Пуск и наберите
-         «Терминал». В Windows 10 его можно бесплатно поставить из Microsoft Store.</p>
-      <div class="note warn">
-        <span class="t">Не используйте чёрное окно cmd.exe</span>
-        Старая «Командная строка» не умеет показывать русские буквы из Linux —
-        вместо текста будут значки вроде <code>“бв ­®ўйЁЄ</code>, и вы не поймёте,
-        что спрашивает установщик. В «Терминале» всё отображается правильно.
+      <!-- Windows -->
+      <div class="branch on" data-branch="win">
+        <p>Понадобится приложение <strong>«Терминал»</strong> (Windows Terminal) — бесплатное,
+           от самой Microsoft.</p>
+        <ul>
+          <li><strong>Windows 11:</strong> оно уже стоит. Нажмите Пуск и наберите «Терминал».</li>
+          <li><strong>Windows 10:</strong> откройте Microsoft Store, найдите
+              <a href="https://apps.microsoft.com/detail/9n0dx20hk701" target="_blank" rel="noopener">Windows Terminal</a>
+              и нажмите «Получить».</li>
+        </ul>
+        <div class="note warn">
+          <span class="t">Старую «Командную строку» (cmd.exe) не берите</span>
+          Она не умеет показывать русские буквы из Linux: вместо текста будут значки
+          вроде <code>“бв ­®ўйЁЄ</code>, и вы не поймёте, что спрашивает установщик.
+          Ставить ничего не нужно, если у вас Windows 11 — «Терминал» там уже есть.
+        </div>
+        <p>Откройте Терминал и введите команду:</p>
+        <div class="cmd">
+          <pre><code id="c-ssh">ssh root@ВАШ_IP</code></pre>
+          <button class="copy" data-for="c-ssh">Копировать</button>
+        </div>
+        <p><strong>Вставить команду</strong> в Терминал можно обычным <code>Ctrl+V</code>
+           или правой кнопкой мыши.</p>
+        <div class="note">
+          <span class="t">Пишет «ssh не является внутренней или внешней командой»</span>
+          Значит не включён клиент SSH. Откройте
+          <b>Параметры → Приложения → Дополнительные компоненты → Добавить компонент</b>,
+          найдите <b>Клиент OpenSSH</b> и установите. Потом закройте и откройте Терминал заново.
+        </div>
       </div>
 
-      <p><strong>На macOS и Linux</strong> откройте «Терминал» — он уже есть в системе.</p>
-
-      <p>Дальше одна команда, одинаковая везде:</p>
-      <div class="cmd">
-        <pre><code id="c-ssh">ssh root@ВАШ_IP</code></pre>
-        <button class="copy" data-for="c-ssh">Копировать</button>
+      <!-- Mac и Linux -->
+      <div class="branch" data-branch="mac">
+        <p>Откройте приложение <strong>«Терминал»</strong> — оно уже есть в системе.
+           На Маке найти проще всего через поиск: <code>Cmd+Пробел</code>, наберите
+           «Терминал».</p>
+        <p>Введите команду:</p>
+        <div class="cmd">
+          <pre><code id="c-ssh-mac">ssh root@ВАШ_IP</code></pre>
+          <button class="copy" data-for="c-ssh-mac">Копировать</button>
+        </div>
+        <p><strong>Вставить команду</strong> можно обычным <code>Cmd+V</code>.</p>
       </div>
 
       <p>Первый раз он спросит <code>Are you sure you want to continue connecting</code> —
@@ -440,20 +473,6 @@
       <p>Затем введите пароль root — его присылает хостинг. При вводе пароля
          <strong>на экране ничего не появляется</strong>: ни звёздочек, ни точек.
          Это нормально, наберите вслепую и нажмите Enter.</p>
-
-      <div class="note">
-        <span class="t">Как вставлять команды</span>
-        В «Терминале» Windows и в macOS вставка обычная: <code>Ctrl+V</code>
-        (на Маке <code>Cmd+V</code>). Если пользуетесь PuTTY — там вставка
-        <b>правой кнопкой мыши</b>, сочетание клавиш не работает.
-      </div>
-
-      <div class="note">
-        <span class="t">Пишет «ssh не является внутренней или внешней командой»</span>
-        Значит в Windows не включён клиент SSH. Откройте
-        <b>Параметры → Приложения → Дополнительные компоненты → Добавить компонент</b>
-        и поставьте <b>Клиент OpenSSH</b>. После этого закройте и откройте Терминал заново.
-      </div>
     </section>
 
     <!-- 3 -->
@@ -966,7 +985,13 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
     document.querySelectorAll('[data-v="ip"]').forEach(function (n) { n.textContent = ip; });
     document.querySelectorAll('[data-v="recname"]').forEach(function (n) { n.textContent = recName(d); });
 
-    document.getElementById("c-ssh").textContent = "ssh root@" + ip;
+    var sshCmd = "ssh root@" + ip;
+    document.getElementById("c-ssh").textContent = sshCmd;
+    document.getElementById("c-ssh-mac").textContent = sshCmd;
+
+    var os = pick("os");
+    document.querySelector('[data-branch="win"]').classList.toggle("on", os === "win");
+    document.querySelector('[data-branch="mac"]').classList.toggle("on", os === "mac");
     document.getElementById("c-url").textContent = "https://" + d;
     document.getElementById("c-install").textContent = CMD;
 
@@ -983,14 +1008,21 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
     });
 
     document.getElementById("mode-line").innerHTML =
-      "Дальше на странице: <b>" + (cf ? "домен настраивается токеном Cloudflare" : "запись создаёте руками") +
-      "</b> · <b>" + (needProxy ? "шаг про прокси показан" : "прокси не нужен") + "</b>";
+      "Показываем для: <b>" + (os === "win" ? "Windows" : "Mac") +
+      "</b> · <b>" + (cf ? "домен через Cloudflare" : "запись создаёте руками") +
+      "</b> · <b>" + (needProxy ? "с прокси" : "без прокси") + "</b>";
 
     store("domain", dEl.value); store("ip", iEl.value);
-    store("reg", pick("reg")); store("srv", pick("srv"));
+    store("reg", pick("reg")); store("srv", pick("srv")); store("os", os);
   }
 
   dEl.value = load("domain"); iEl.value = load("ip");
+  // Систему угадываем по браузеру - обычно выбирать ничего не придётся
+  function guessOS() {
+    var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "");
+    return /win/i.test(p) ? "win" : "mac";
+  }
+  setPick("os", load("os") || guessOS());
   setPick("reg", load("reg") || "ru");
   setPick("srv", load("srv") || "ru");
   [dEl, iEl].forEach(function (el) { el.addEventListener("input", render); });
