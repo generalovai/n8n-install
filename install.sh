@@ -18,7 +18,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.1.0"
+INST_VER="2.2.0"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
