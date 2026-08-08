@@ -91,11 +91,21 @@ ask_secret() { # ask_secret ПЕРЕМЕННАЯ "Вопрос" - ввод не 
 }
 
 ask_yes() { # ask_yes "Вопрос" "д|н" -> код 0 = да
+  # Раньше всё, что не совпало точно с "д", молча считалось отказом.
+  # На вопросе вроде "нужен ли прокси" такая ошибка ломает всю установку,
+  # поэтому непонятный ответ теперь переспрашиваем, а не додумываем.
   local __q="$1" __def="${2:-д}" __a=""
-  printf '%s%s%s (д/н) [%s]: ' "$B" "$__q" "$R" "$__def"
-  IFS= read -r -u 3 __a || no_input
-  __a="${__a:-$__def}"
-  case "${__a,,}" in д|да|y|yes) return 0 ;; *) return 1 ;; esac
+  while :; do
+    printf '%s%s%s (д/н) [%s]: ' "$B" "$__q" "$R" "$__def"
+    IFS= read -r -u 3 __a || no_input
+    __a="$(printf '%s' "$__a" | tr -d '[:space:]')"   # пробелы и перевод строки
+    [ -n "$__a" ] || __a="$__def"
+    case "$__a" in
+      д|Д|да|Да|дА|ДА|y|Y|yes|Yes|YES|1)   return 0 ;;
+      н|Н|нет|Нет|неТ|НЕТ|n|N|no|No|NO|0)  return 1 ;;
+      *) warn "Не понял ответ «$__a». Напишите  д  (да) или  н  (нет)." ;;
+    esac
+  done
 }
 
 # ---------- вспомогательное --------------------------------------------------
@@ -116,6 +126,49 @@ env_get() { # читает значение из уже существующег
 }
 
 dc() { docker compose --project-directory "$DIR" "$@"; }
+
+ask_proxy() {   # спрашивает адрес прокси и проверяет, что через него есть интернет
+  while :; do
+    ask PROXY_RAW "Адрес прокси"
+    if PROXY_URL="$(normalize_proxy "$PROXY_RAW")"; then
+      say "  Понял так: $B$(mask_proxy "$PROXY_URL")$R"
+      ask_yes "  Всё верно?" "д" || { warn "Хорошо, введите заново."; continue; }
+    else
+      warn "Не разобрал этот адрес."
+      say  "  Подойдёт любой из привычных видов, например:"
+      say  "    http://логин:пароль@203.0.113.10:10000"
+      say  "    203.0.113.10:10000@логин:пароль"
+      say  "    203.0.113.10:10000:логин:пароль"
+      say  "  Если прокси без пароля - просто  203.0.113.10:10000"
+      continue
+    fi
+    case "$PROXY_URL" in
+      socks5*)
+        _cred="${PROXY_URL#*://}"
+        case "$_cred" in
+          *@*)
+            _pass="${_cred%@*}"; _pass="${_pass#*:}"
+            case "$_pass" in
+              *@*|*\"*)
+                warn "В пароле прокси есть символ @ или кавычка."
+                say  "  К сожалению, мост socks5 такие пароли не понимает."
+                say  "  Варианты: смените пароль у прокси или возьмите http-прокси."
+                if ask_yes "Ввести другой адрес?" "д"; then continue; else PROXY_URL=""; break; fi ;;
+            esac ;;
+        esac ;;
+    esac
+    info "Проверяем прокси (до 40 секунд)..."
+    _pc="$(proxy_for_curl "$PROXY_URL")"
+    if curl --proxy "$_pc" -sS --max-time 20 -o /dev/null https://api.ipify.org 2>/dev/null \
+       || curl --proxy "$_pc" -sS --max-time 20 -o /dev/null https://www.google.com 2>/dev/null; then
+      ok "Прокси работает"
+      break
+    fi
+    warn "Через этот прокси не удалось выйти в интернет."
+    ask_yes "Ввести другой адрес?" "д" || { PROXY_URL=""; break; }
+  done
+}
+
 
 # Ответы человека и сгенерированные пароли сохраняем СРАЗУ, как только они
 # собраны, - до установки Docker и прочих долгих шагов. Если что-то упадёт
@@ -237,9 +290,15 @@ tg_send() {
     --data "disable_web_page_preview=true" 2>/dev/null || true
 }
 
-# curl, который при необходимости идёт через прокси пользователя
+# curl, который при необходимости идёт через прокси пользователя.
+# Если через прокси не вышло - пробуем напрямую: бывает, что прокси
+# закрывает какие-то адреса, а сервер до них дотягивается сам.
 pcurl() {
-  if [ -n "${PROXY_URL:-}" ]; then curl --proxy "$(proxy_for_curl "$PROXY_URL")" "$@"; else curl "$@"; fi
+  if [ -n "${PROXY_URL:-}" ]; then
+    curl --proxy "$(proxy_for_curl "$PROXY_URL")" "$@" || curl "$@"
+  else
+    curl "$@"
+  fi
 }
 
 # =============================================================================
@@ -386,45 +445,26 @@ if [ "$NEED_PROXY_Q" = "да" ]; then
 
 TXT
   if ask_yes "Настроить прокси?" "н"; then
-    while :; do
-      ask PROXY_RAW "Адрес прокси"
-      if PROXY_URL="$(normalize_proxy "$PROXY_RAW")"; then
-        say "  Понял так: $B$(mask_proxy "$PROXY_URL")$R"
-        ask_yes "  Всё верно?" "д" || { warn "Хорошо, введите заново."; continue; }
-      else
-        warn "Не разобрал этот адрес."
-        say  "  Подойдёт любой из привычных видов, например:"
-        say  "    http://логин:пароль@203.0.113.10:10000"
-        say  "    203.0.113.10:10000@логин:пароль"
-        say  "    203.0.113.10:10000:логин:пароль"
-        say  "  Если прокси без пароля - просто  203.0.113.10:10000"
-        continue
-      fi
-      case "$PROXY_URL" in
-        socks5*)
-          _cred="${PROXY_URL#*://}"
-          case "$_cred" in
-            *@*)
-              _pass="${_cred%@*}"; _pass="${_pass#*:}"
-              case "$_pass" in
-                *@*|*\"*)
-                  warn "В пароле прокси есть символ @ или кавычка."
-                  say  "  К сожалению, мост socks5 такие пароли не понимает."
-                  say  "  Варианты: смените пароль у прокси или возьмите http-прокси."
-                  if ask_yes "Ввести другой адрес?" "д"; then continue; else PROXY_URL=""; break; fi ;;
-              esac ;;
-          esac ;;
-      esac
-      info "Проверяем прокси (до 40 секунд)..."
-      _pc="$(proxy_for_curl "$PROXY_URL")"
-      if curl --proxy "$_pc" -sS --max-time 20 -o /dev/null https://api.ipify.org 2>/dev/null \
-         || curl --proxy "$_pc" -sS --max-time 20 -o /dev/null https://www.google.com 2>/dev/null; then
-        ok "Прокси работает"
-        break
-      fi
-      warn "Через этот прокси не удалось выйти в интернет."
-      ask_yes "Ввести другой адрес?" "д" || { PROXY_URL=""; break; }
-    done
+    ask_proxy
+  fi
+fi
+
+# Человек мог отказаться от прокси по ошибке - а с российского сервера без него
+# установка дальше просто не пройдёт. Проверяем сразу, а не через три шага,
+# когда уже непонятно, что пошло не так.
+if [ -z "$PROXY_URL" ]; then
+  info "Проверяю, открыты ли нужные сайты напрямую..."
+  if curl -sS -o /dev/null --max-time 20 https://get.docker.com 2>/dev/null; then
+    ok "Открыты - прокси действительно не нужен"
+  else
+    warn "С этого сервера не открывается get.docker.com."
+    say  "  Для серверов в России это обычное дело. Без прокси установка"
+    say  "  дальше не пройдёт: Docker будет неоткуда скачать."
+    if ask_yes "Указать прокси?" "д"; then
+      ask_proxy
+    else
+      warn "Продолжаем без прокси - установка, скорее всего, прервётся на Docker."
+    fi
   fi
 fi
 
@@ -836,9 +876,43 @@ if docker compose version >/dev/null 2>&1; then
   setup_docker_proxy
 else
   info "Ставим Docker с официального сайта, подождите..."
-  pcurl -fsSL --max-time 120 https://get.docker.com -o /tmp/get-docker.sh \
-    || die "Не удалось скачать установщик Docker.
-Если сервер в России - вернитесь на шаг 2 и укажите прокси."
+  # Скачиваем установщик Docker. Если не вышло - показываем, что именно
+  # ответила сеть, и сразу проверяем обходной путь: с прокси и без него.
+  DL_ERR="$(mktemp)"
+  if ! pcurl -fsSL --max-time 120 https://get.docker.com -o /tmp/get-docker.sh 2>"$DL_ERR"; then
+    say ""
+    say "Что ответила сеть:"
+    sed 's/^/    /' "$DL_ERR" | tail -5
+    say ""
+    say "Проверяю, откуда есть доступ к get.docker.com:"
+    D_DIRECT="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://get.docker.com 2>&1 || echo "нет ответа")"
+    say "    напрямую с сервера: $D_DIRECT"
+    if [ -n "$PROXY_URL" ]; then
+      D_VIA="$(curl --proxy "$(proxy_for_curl "$PROXY_URL")" -sS -o /dev/null -w '%{http_code}' --max-time 20 https://get.docker.com 2>&1 || echo "нет ответа")"
+      say "    через ваш прокси:   $D_VIA"
+    else
+      say "    прокси не указан"
+    fi
+    rm -f "$DL_ERR"
+    say ""
+    if [ "$D_DIRECT" = "200" ]; then
+      die "Сайт Docker с сервера открывается, но скачать не вышло.
+Похоже на временный сбой сети - просто запустите команду ещё раз."
+    elif [ -n "$PROXY_URL" ] && [ "${D_VIA:-}" = "200" ]; then
+      die "Напрямую не открывается, а через ваш прокси - открывается.
+Значит прокси рабочий, но не применился при скачивании. Запустите команду
+ещё раз: этот случай уже учтён, скачивание пойдёт через прокси."
+    elif [ -n "$PROXY_URL" ]; then
+      die "Не открывается ни напрямую, ни через ваш прокси.
+Проверьте прокси с домашнего компьютера:
+  curl --proxy <ваш прокси> -sS -o /dev/null -w '%{http_code}' https://get.docker.com
+Должно ответить 200. Если нет - прокси нерабочий или закончился трафик."
+    else
+      die "Сервер не может открыть get.docker.com напрямую - обычное дело для России.
+Запустите установку заново и на шаге 2 укажите прокси."
+    fi
+  fi
+  rm -f "$DL_ERR"
 
   # Вывод установщика Docker сохраняем: без него причину сбоя не узнать.
   DOCKER_OUT="$(mktemp)"
