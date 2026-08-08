@@ -117,6 +117,51 @@ env_get() { # читает значение из уже существующег
 
 dc() { docker compose --project-directory "$DIR" "$@"; }
 
+# Ответы человека и сгенерированные пароли сохраняем СРАЗУ, как только они
+# собраны, - до установки Docker и прочих долгих шагов. Если что-то упадёт
+# на середине, при повторном запуске не придётся вводить всё заново.
+write_env() {
+  mkdir -p "$DIR"
+  umask 077
+  {
+    echo "# Создано установщиком n8n v$INST_VER, $(date '+%F %T')"
+    echo "# ВНИМАНИЕ: здесь пароли и ключ шифрования. Никому не показывайте."
+    echo
+    echo "DATA_FOLDER=$DIR"
+    echo "N8N_FQDN=$FQDN"
+    echo "SSL_EMAIL=$SSL_EMAIL"
+    echo "GENERIC_TIMEZONE=$GENERIC_TIMEZONE"
+    echo "INSTALLER_VERSION=$INST_VER"
+    echo "N8N_IMAGE_TAG=latest"
+    echo "AUTO_UPDATE=$AUTO_UPDATE"
+    echo "TG_TOKEN=$(env_esc "$TG_TOKEN")"
+    echo "TG_CHAT=$TG_CHAT"
+    echo "NODE_MEM_MB=$NODE_MEM_MB"
+    echo "N8N_PROXY_HOPS=$N8N_PROXY_HOPS"
+    echo "PUSH_BACKEND=$PUSH_BACKEND"
+    echo
+    echo "TLS_MODE=$TLS_MODE"
+    echo "CF_PROXIED=$CF_PROXIED"
+    [ -n "$CF_API_TOKEN" ] && echo "CF_API_TOKEN=$(env_esc "$CF_API_TOKEN")"
+    echo
+    echo "PROXY_URL=$(env_esc "$PROXY_URL")"
+    echo "PROXY_KIND=$PROXY_KIND"
+    echo "CONTAINER_PROXY=$(env_esc "$CONTAINER_PROXY")"
+    echo
+    echo "# Ключ шифрования: им зашифрованы ВСЕ ваши доступы."
+    echo "# Потеряете - восстановить их будет невозможно."
+    echo "N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY"
+    echo
+    echo "POSTGRES_DB=n8n"
+    echo "POSTGRES_USER=postgres"
+    echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
+    echo "POSTGRES_NON_ROOT_USER=n8n"
+    echo "POSTGRES_NON_ROOT_PASSWORD=$POSTGRES_NON_ROOT_PASSWORD"
+  } > "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+}
+
+
 # Для socks5 просим curl резолвить имена НА СТОРОНЕ прокси (socks5h): если у
 # сервера подменён или заблокирован DNS, обычный socks5 всё равно не сработает.
 proxy_for_curl() { printf '%s' "${1/#socks5:\/\//socks5h://}"; }
@@ -732,6 +777,9 @@ POSTGRES_PASSWORD="$(env_get POSTGRES_PASSWORD || gen_secret)"
 POSTGRES_NON_ROOT_PASSWORD="$(env_get POSTGRES_NON_ROOT_PASSWORD || gen_secret)"
 ok "Пароли базы данных готовы"
 
+write_env
+ok "Ответы сохранены - если что-то прервётся, вводить заново не придётся"
+
 # ---------- 7. Docker (и прокси для него) ------------------------------------
 step "Шаг 7 из 10. Docker"
 
@@ -877,43 +925,7 @@ step "Шаг 9 из 10. Создаём файлы n8n в $DIR"
 
 mkdir -p "$DIR/caddy_config" "$DIR/local_files" "$DIR/backups" "$DIR/caddy_build" "$DIR/proxy_bridge"
 
-umask 077
-{
-  echo "# Создано установщиком n8n v$INST_VER, $(date '+%F %T')"
-  echo "# ВНИМАНИЕ: здесь пароли и ключ шифрования. Никому не показывайте."
-  echo
-  echo "DATA_FOLDER=$DIR"
-  echo "N8N_FQDN=$FQDN"
-  echo "SSL_EMAIL=$SSL_EMAIL"
-  echo "GENERIC_TIMEZONE=$GENERIC_TIMEZONE"
-  echo "INSTALLER_VERSION=$INST_VER"
-  echo "N8N_IMAGE_TAG=latest"
-  echo "AUTO_UPDATE=$AUTO_UPDATE"
-  echo "TG_TOKEN=$(env_esc "$TG_TOKEN")"
-  echo "TG_CHAT=$TG_CHAT"
-  echo "NODE_MEM_MB=$NODE_MEM_MB"
-  echo "N8N_PROXY_HOPS=$N8N_PROXY_HOPS"
-  echo "PUSH_BACKEND=$PUSH_BACKEND"
-  echo
-  echo "TLS_MODE=$TLS_MODE"
-  echo "CF_PROXIED=$CF_PROXIED"
-  [ -n "$CF_API_TOKEN" ] && echo "CF_API_TOKEN=$(env_esc "$CF_API_TOKEN")"
-  echo
-  echo "PROXY_URL=$(env_esc "$PROXY_URL")"
-  echo "PROXY_KIND=$PROXY_KIND"
-  echo "CONTAINER_PROXY=$(env_esc "$CONTAINER_PROXY")"
-  echo
-  echo "# Ключ шифрования: им зашифрованы ВСЕ ваши доступы."
-  echo "# Потеряете - восстановить их будет невозможно."
-  echo "N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY"
-  echo
-  echo "POSTGRES_DB=n8n"
-  echo "POSTGRES_USER=postgres"
-  echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
-  echo "POSTGRES_NON_ROOT_USER=n8n"
-  echo "POSTGRES_NON_ROOT_PASSWORD=$POSTGRES_NON_ROOT_PASSWORD"
-} > "$ENV_FILE"
-chmod 600 "$ENV_FILE"
+write_env
 ok "Файл настроек .env создан (доступ только для root)"
 
 # дальше файлы должны читаться из контейнеров (postgres работает не от root)
