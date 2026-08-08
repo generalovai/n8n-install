@@ -737,19 +737,19 @@ step "Шаг 7 из 10. Docker"
 
 # Прокси демону Docker нужен ДО первого скачивания образов: без него из России
 # образы часто не скачиваются вообще.
-# apt тоже должен ходить через прокси: из России репозиторий Docker и часть
-# зеркал Ubuntu недоступны напрямую. Переменных окружения ему мало.
+# Через прокси направляем ТОЛЬКО репозиторий Docker. Зеркала Ubuntu из России
+# доступны напрямую, и гонять их через зарубежный прокси - это медленно
+# и лишний повод для сбоя (проверено: установка падала именно на этом).
 setup_apt_proxy() {
   if [ -n "$PROXY_URL" ]; then
     local ap="$PROXY_URL"
     [ "$PROXY_KIND" = "socks5" ] && ap="${PROXY_URL/#socks5:\/\//socks5h://}"
-    printf 'Acquire::http::Proxy "%s";\nAcquire::https::Proxy "%s";\n' "$ap" "$ap" \
-      > /etc/apt/apt.conf.d/01n8n-proxy
-    export http_proxy="$PROXY_URL" https_proxy="$PROXY_URL"
-    export HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL"
+    {
+      printf 'Acquire::http::Proxy::download.docker.com "%s";\n'  "$ap"
+      printf 'Acquire::https::Proxy::download.docker.com "%s";\n' "$ap"
+    } > /etc/apt/apt.conf.d/01n8n-proxy
   else
     rm -f /etc/apt/apt.conf.d/01n8n-proxy
-    unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
   fi
 }
 
@@ -781,7 +781,7 @@ setup_docker_proxy() {
 }
 
 setup_apt_proxy
-[ -n "$PROXY_URL" ] && ok "apt и загрузчик Docker направлены через ваш прокси"
+[ -n "$PROXY_URL" ] && ok "Репозиторий Docker направлен через ваш прокси (остальное - напрямую)"
 
 if docker compose version >/dev/null 2>&1; then
   ok "Docker уже установлен ($(docker --version | cut -d, -f1))"
@@ -794,7 +794,12 @@ else
 
   # Вывод установщика Docker сохраняем: без него причину сбоя не узнать.
   DOCKER_OUT="$(mktemp)"
-  if ! sh /tmp/get-docker.sh >"$DOCKER_OUT" 2>&1; then
+  # https_proxy - для download.docker.com; зеркала Ubuntu исключаем явно,
+  # чтобы пакеты системы качались напрямую и быстро
+  if ! env ${PROXY_URL:+https_proxy="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" \
+        no_proxy="localhost,127.0.0.1,.ubuntu.com,.debian.org" \
+        NO_PROXY="localhost,127.0.0.1,.ubuntu.com,.debian.org"} \
+        sh /tmp/get-docker.sh >"$DOCKER_OUT" 2>&1; then
     cat "$DOCKER_OUT" >> "$LOG"
     say ""
     say "Что ответил установщик Docker (последние строки):"
