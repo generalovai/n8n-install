@@ -9,6 +9,15 @@
 curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh -o n8n-install.sh && bash n8n-install.sh
 ```
 
+**Если `Could not resolve host: raw.githubusercontent.com`** — у части российских провайдеров
+GitHub не открывается. Запасное зеркало с тем же файлом:
+
+```bash
+curl -sSL https://cdn.jsdelivr.net/gh/generalovai/n8n-install@main/install.sh -o n8n-install.sh && bash n8n-install.sh
+```
+
+Готовые воркфлоу скрипт тоже качает сначала с GitHub, потом с этого зеркала.
+
 > Команда намеренно в два шага. Красивая форма `bash <(curl ...)` **ломается под `sudo`**:
 > sudo закрывает файловые дескрипторы, и подставленный `/dev/fd/63` исчезает — проверено
 > на живом сервере. А `curl ... | bash` лишает скрипт возможности задавать вопросы.

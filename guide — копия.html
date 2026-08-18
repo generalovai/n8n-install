@@ -624,12 +624,6 @@ socks5://логин:пароль@адрес:порт</code></pre>
         <pre><code id="c-install">curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh -o n8n-install.sh &amp;&amp; bash n8n-install.sh</code></pre>
         <button class="copy" data-for="c-install">Копировать</button>
       </div>
-      <div class="note">
-        <span class="t">Если пишет «Could not resolve host»</span>
-        Сервер не достучался до GitHub — у части российских провайдеров он не открывается.
-        Возьмите ту же команду с зеркала, файл там тот же самый:
-        <code>curl -sSL https://cdn.jsdelivr.net/gh/generalovai/n8n-install@main/install.sh -o n8n-install.sh &amp;&amp; bash n8n-install.sh</code>
-      </div>
       <p>Дальше скрипт спросит по-русски: адрес для n8n, нужен ли прокси, где DNS,
          вашу почту и часовой пояс. На всё остальное он ответит сам.</p>
       <div class="note">
@@ -717,8 +711,8 @@ socks5://логин:пароль@адрес:порт</code></pre>
          указали при установке</b> — происходят две вещи:</p>
       <ul>
         <li><strong>В 2:00</strong> — резервная копия. Свежие хранятся за каждый день недели,
-            дальше по одной на неделю и по одной на месяц — так можно вернуться примерно
-            на четыре месяца назад, не забивая диск. Старые удаляются сами.</li>
+            дальше по одной на неделю и по одной на месяц — так можно вернуться на три месяца
+            назад, не забивая диск. Старые удаляются сами.</li>
         <li><strong>В 3:00</strong> — проверка обновлений. Если вышла новая версия, сервер
             сделает ещё одну свежую копию, обновится и убедится, что всё поднялось.
             Не поднялось — <strong>сам вернёт прежнюю версию</strong> вместе с данными
@@ -818,23 +812,6 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
            про прокси укажите его адрес: дальше скрипт пропишет прокси везде, где нужно.</p>
         <p>Проверить, работает ли он: сделайте ноду HTTP Request на адрес
            <code>https://api.ipify.org</code>. Она должна показать IP прокси, а не IP сервера.</p>
-      </div>
-    </details>
-
-    <details>
-      <summary>Пишет «Could not resolve host: raw.githubusercontent.com»</summary>
-      <div class="body">
-        <p>Сервер не смог найти адрес GitHub. Причина одна из двух, обе лечатся за минуту.</p>
-        <p><b>1. У сервера не настроен справочник адресов (DNS).</b> Проверьте, есть ли сеть вообще:</p>
-        <div class="cmd"><pre><code id="c-dns">ping -c 2 1.1.1.1</code></pre>
-        <button class="copy" data-for="c-dns">Копировать</button></div>
-        <p>Если ответы идут — сеть есть, сломан справочник. Пропишите рабочий:</p>
-        <div class="cmd"><pre><code id="c-dns2">echo "nameserver 1.1.1.1" &gt; /etc/resolv.conf</code></pre>
-        <button class="copy" data-for="c-dns2">Копировать</button></div>
-        <p><b>2. Провайдер не пропускает GitHub.</b> Так бывает у части российских хостингов.
-           Возьмите ту же команду с зеркала — файл там точно такой же:</p>
-        <div class="cmd"><pre><code id="c-mirror">curl -sSL https://cdn.jsdelivr.net/gh/generalovai/n8n-install@main/install.sh -o n8n-install.sh &amp;&amp; bash n8n-install.sh</code></pre>
-        <button class="copy" data-for="c-mirror">Копировать</button></div>
       </div>
     </details>
 

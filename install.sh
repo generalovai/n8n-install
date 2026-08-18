@@ -6,6 +6,9 @@
 #  Запуск одной командой:
 #    curl -sSL https://raw.githubusercontent.com/generalovai/n8n-install/main/install.sh -o n8n-install.sh && bash n8n-install.sh
 #
+#  Если GitHub не открывается (частое дело у российских провайдеров):
+#    curl -sSL https://cdn.jsdelivr.net/gh/generalovai/n8n-install@main/install.sh -o n8n-install.sh && bash n8n-install.sh
+#
 #  Умеет:
 #    - домен от любого регистратора (reg.ru и т.п.) - сертификат по HTTP;
 #    - домен на DNS Cloudflare - сам создаёт A-запись и берёт сертификат по DNS
@@ -1421,28 +1424,42 @@ chmod 600 "$OUT"/*
 
 # Чем старше копия, тем реже она нужна. Держим:
 #   - все за последние 7 дней (вчерашняя ошибка - самый частый случай),
-#   - по одной на каждую из 4 последних недель,
-#   - по одной на каждый из 3 последних месяцев.
-# Итого около 14 файлов вместо 90, а дотянуться можно на три месяца назад.
+#   - по одной на неделю за последние 8 недель,
+#   - по одной на месяц за последние 6 месяцев.
+# Итого около 15 файлов вместо сотен, а дотянуться можно на полгода назад.
+# Недели и месяцы свежих копий помечаются занятыми - иначе слоты уходят
+# на те же самые дни и архив получается куда короче обещанного.
 rotate() {   # rotate ПРЕФИКС РАСШИРЕНИЕ
-  local pref="$1" ext="$2" f day week month n=0
-  local weeks="" months="" keep=""
+  local pref="$1" ext="$2" f day week month keep="" n=0
+  local weeks="" months="" wcount=0 mcount=0
   while read -r f; do
     [ -n "$f" ] || continue
     day="$(basename "$f" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)"
     [ -n "$day" ] || { keep="$keep$f\n"; continue; }   # непонятное имя - не трогаем
-    n=$((n + 1))
-    if [ "$n" -le 7 ]; then keep="$keep$f\n"; continue; fi
     week="$(date -d "$day" +%G-%V 2>/dev/null || echo "$day")"
     month="${day%-*}"
+    n=$((n + 1))
+
+    if [ "$n" -le 7 ]; then
+      # свежая неделя: держим все. Их недели и месяцы сразу помечаем занятыми,
+      # иначе недельные слоты уйдут на те же самые дни и архив выйдет коротким.
+      keep="$keep$f\n"
+      case " $weeks "  in *" $week "*)  ;; *) weeks="$weeks $week";    wcount=$((wcount+1)) ;; esac
+      case " $months " in *" $month "*) ;; *) months="$months $month"; mcount=$((mcount+1)) ;; esac
+      continue
+    fi
+
     case " $weeks " in *" $week "*) ;; *)
-      if [ "$(printf '%s' "$weeks" | wc -w)" -lt 4 ]; then
-        weeks="$weeks $week"; keep="$keep$f\n"; continue
+      if [ "$wcount" -lt 8 ]; then
+        weeks="$weeks $week"; wcount=$((wcount+1)); keep="$keep$f\n"
+        case " $months " in *" $month "*) ;; *) months="$months $month"; mcount=$((mcount+1)) ;; esac
+        continue
       fi ;;
     esac
+
     case " $months " in *" $month "*) ;; *)
-      if [ "$(printf '%s' "$months" | wc -w)" -lt 3 ]; then
-        months="$months $month"; keep="$keep$f\n"; continue
+      if [ "$mcount" -lt 6 ]; then
+        months="$months $month"; mcount=$((mcount+1)); keep="$keep$f\n"; continue
       fi ;;
     esac
   done < <(ls -1t "$OUT/$pref"*"$ext" 2>/dev/null)
@@ -1633,11 +1650,15 @@ chmod +x "$DIR/autoupdate.sh"
 # Кладём файлы и заводим импорт, который сработает сам, как только человек
 # создаст учётную запись владельца: до этого момента n8n не к кому их привязать.
 mkdir -p "$DIR/workflows"
+# Основной адрес - GitHub. Запасной - зеркало jsDelivr: у части провайдеров
+# в России raw.githubusercontent.com не открывается вообще.
 WF_BASE="https://raw.githubusercontent.com/generalovai/n8n-install/main/workflows"
+WF_MIRROR="https://cdn.jsdelivr.net/gh/generalovai/n8n-install@main/workflows"
 WF_LIST="01-proverka-servera.json 02-vitrina-uzlov.json 03-uzly-v-rabote.json"
 # shellcheck disable=SC2086
 for wf in $WF_LIST; do
-  pcurl -fsSL --max-time 60 "$WF_BASE/$wf" -o "$DIR/workflows/$wf" 2>/dev/null \
+  pcurl -fsSL --max-time 60 "$WF_BASE/$wf"   -o "$DIR/workflows/$wf" 2>/dev/null \
+    || pcurl -fsSL --max-time 60 "$WF_MIRROR/$wf" -o "$DIR/workflows/$wf" 2>/dev/null \
     || warn "Не удалось скачать готовый воркфлоу $wf - не страшно, всё остальное работает"
 done
 chmod 644 "$DIR"/workflows/*.json 2>/dev/null || true
