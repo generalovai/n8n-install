@@ -2,3 +2,8 @@
 .DS_Store
 *.log
 diagnose.txt
+
+# случайные дубликаты из Finder - в репозиторий им не надо
+*копия*
+* copy*
+*.bak
