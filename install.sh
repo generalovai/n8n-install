@@ -21,7 +21,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.3.0"
+INST_VER="2.3.1"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
@@ -1822,6 +1822,34 @@ g() { grep "^$1=" .env 2>/dev/null | cut -d= -f2-; }
     *)   echo "снаружи по адресу:   отвечает кодом $OUTSIDE" ;;
   esac
   echo "сертификат: $(docker compose logs caddy 2>/dev/null | grep -c 'certificate obtained') раз(а) получен"
+
+  echo
+  echo "=== ПРОКСИ ==="
+  PK="$(g PROXY_KIND)"
+  if [ -z "$PK" ] || [ "$PK" = none ]; then
+    echo "не используется"
+  else
+    PU="$(g PROXY_URL | sed 's/\$\$/$/g')"
+    echo "адрес: $(printf '%s' "$PU" | sed -E 's|(://[^:@]+:)[^@]*@|\1*****@|')  ($PK)"
+    SIP="$(curl -4 -sS --max-time 15 https://api.ipify.org 2>/dev/null | tr -dc '0-9.:a-fA-F')"
+    PIP="$(curl -sS --proxy "${PU/#socks5:\/\//socks5h://}" --max-time 20 https://api.ipify.org 2>/dev/null | tr -dc '0-9.:a-fA-F')"
+    CIP="$(docker compose exec -T n8n node -e "fetch('https://api.ipify.org').then(r=>r.text()).then(t=>console.log(t.trim())).catch(()=>{})" 2>/dev/null | tail -n1 | tr -dc '0-9.:a-fA-F')"
+    if [ -z "$PIP" ]; then
+      echo "с сервера через прокси: НЕ ОТВЕЧАЕТ"
+      echo "  Скорее всего, закончилась оплата прокси или он сменился."
+      echo "  Что делать: запустите установщик ещё раз, на шаге 3 ответьте n на"
+      echo "  вопрос «Оставить его?» и введите новый адрес. Данные не пострадают."
+    else
+      echo "с сервера через прокси: работает (выходит с адреса $PIP)"
+    fi
+    if [ -z "$CIP" ]; then
+      echo "из контейнера n8n:      интернет не отвечает (ноды с зарубежными сервисами не заработают)"
+    elif [ -n "$SIP" ] && [ "$CIP" = "$SIP" ]; then
+      echo "из контейнера n8n:      выходит НАПРЯМУЮ ($CIP), прокси не применился"
+    else
+      echo "из контейнера n8n:      через прокси, адрес $CIP"
+    fi
+  fi
 
   echo
   echo "=== ОШИБКИ В ЖУРНАЛЕ n8n (последние) ==="
