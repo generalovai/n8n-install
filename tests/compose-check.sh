@@ -46,6 +46,17 @@ for mode in plain cloudflare; do
 
   ( cd "$D" && docker compose --project-directory . config --quiet ) \
     && echo "  режим $mode: compose валиден"
+
+  # Исключение для Telegram должно реально попадать в NO_PROXY контейнера n8n
+  if [ "$mode" = cloudflare ]; then
+    np() { ( cd "$D" && docker compose --project-directory . config 2>/dev/null ) | grep -m1 -E '^ *NO_PROXY:' | sed 's/.*NO_PROXY: *//'; }
+    case "$(np)" in *telegram*) echo "  ПРОВАЛ: Telegram исключён из прокси без причины"; exit 1 ;; esac
+    sed -i.b 's/^NO_PROXY_EXTRA=.*/NO_PROXY_EXTRA=,api.telegram.org,.telegram.org/' "$D/.env" && rm -f "$D/.env.b"
+    case "$(np)" in
+      *proxy-bridge,api.telegram.org,.telegram.org) echo "  режим $mode: исключение Telegram доходит до n8n" ;;
+      *) echo "  ПРОВАЛ: NO_PROXY без Telegram: $(np)"; exit 1 ;;
+    esac
+  fi
   OUT="$(docker run --rm -e CF_API_TOKEN=aBcDeF1234567890aBcDeF1234567890aBcDeF12 \
     -e N8N_FQDN=n8n.example.ru -e SSL_EMAIL=a@b.ru \
     -v "$D/caddy_config/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 \

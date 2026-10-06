@@ -12,6 +12,13 @@ case "$A" in
   *cloudflare.com/ips-v4*)          printf '173.245.48.0/20\n103.21.244.0/22\n';;
   *cloudflare.com/ips-v6*)          printf '2400:cb00::/32\n2606:4700::/32\n';;
   *get-docker.sh*|*get.docker.com*) echo "#!/bin/sh" > /tmp/get-docker.sh; exit 0;;
+  # проверка "пускает ли прокси к Telegram": ведёт себя по TG_MODE
+  *api.telegram.org/bot123/getMe*)
+    case "${TG_MODE:-ok}" in
+      proxy_blocked) case "$A" in *--proxy*) printf 000; exit 7;; *) printf 404;; esac;;
+      both_blocked)  printf 000; exit 7;;
+      *)             printf 404;;
+    esac;;
   *api.telegram.org*getMe*)         echo '{"ok":true,"result":{"username":"moy_n8n_bot"}}';;
   *api.telegram.org*getUpdates*)    echo '{"ok":true,"result":[{"message":{"chat":{"id":123456789}}}]}';;
   *api.telegram.org*sendMessage*)   echo "$A" | grep -o 'text=[^&]*' | head -1 >> /tmp/tg-sent.txt; echo '{"ok":true}';;

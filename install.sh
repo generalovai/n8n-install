@@ -21,7 +21,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.3.1"
+INST_VER="2.3.2"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
@@ -206,6 +206,7 @@ write_env() {
     echo "PROXY_URL=$(env_esc "$PROXY_URL")"
     echo "PROXY_KIND=$PROXY_KIND"
     echo "CONTAINER_PROXY=$(env_esc "$CONTAINER_PROXY")"
+    echo "NO_PROXY_EXTRA=$NO_PROXY_EXTRA"
     echo
     echo "# Ключ шифрования: им зашифрованы ВСЕ ваши доступы."
     echo "# Потеряете - восстановить их будет невозможно."
@@ -499,7 +500,32 @@ if [ -n "$PROXY_URL" ]; then
     *)                      PROXY_KIND=http;   CONTAINER_PROXY="$PROXY_URL" ;;
   esac
   ok "Прокси будет использоваться: $( [ "$PROXY_KIND" = socks5 ] && echo 'socks5 (поднимем мост для контейнеров)' || echo 'http' )"
+
+  # Некоторые прокси молча закрывают Telegram (отвечают 403), хотя остальное
+  # пропускают. Тогда n8n не может ни проверить токен бота, ни писать в чат.
+  # Проверяем сразу: если через прокси Telegram не открылся, а напрямую
+  # открывается - пускаем его мимо прокси.
+  NO_PROXY_EXTRA="$(env_get NO_PROXY_EXTRA || true)"   # прежнее решение, если проверка ничего не покажет
+  tg_code() { curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$@" https://api.telegram.org/bot123/getMe 2>/dev/null || true; }
+  info "Проверяю, пускает ли прокси к Telegram..."
+  case "$(tg_code --proxy "$(proxy_for_curl "$PROXY_URL")")" in
+    401|404)
+      NO_PROXY_EXTRA=""
+      ok "Telegram через прокси открывается" ;;
+    *)
+      case "$(tg_code)" in
+        401|404)
+          NO_PROXY_EXTRA=",api.telegram.org,.telegram.org"
+          ok "Ваш прокси не пускает к Telegram, но с сервера он открывается напрямую."
+          say "  Telegram будет ходить мимо прокси, остальное - как раньше." ;;
+        *)
+          warn "Telegram не открывается ни через прокси, ни напрямую."
+          say  "  Установка пройдёт, но бот Telegram в n8n работать не будет."
+          say  "  Напишите в поддержку прокси: «через ваш прокси не открывается api.telegram.org»." ;;
+      esac ;;
+  esac
 else
+  NO_PROXY_EXTRA=""
   ok "Работаем без прокси"
 fi
 
@@ -1302,8 +1328,8 @@ if [ -n "$CONTAINER_PROXY" ]; then
       - HTTPS_PROXY=${CONTAINER_PROXY}
       - http_proxy=${CONTAINER_PROXY}
       - https_proxy=${CONTAINER_PROXY}
-      - NO_PROXY=localhost,127.0.0.1,::1,postgres,n8n,caddy,proxy-bridge
-      - no_proxy=localhost,127.0.0.1,::1,postgres,n8n,caddy,proxy-bridge
+      - NO_PROXY=localhost,127.0.0.1,::1,postgres,n8n,caddy,proxy-bridge${NO_PROXY_EXTRA:-}
+      - no_proxy=localhost,127.0.0.1,::1,postgres,n8n,caddy,proxy-bridge${NO_PROXY_EXTRA:-}
       # Node 24: без этого встроенный fetch прокси игнорирует
       - NODE_USE_ENV_PROXY=1
       # чтобы установка community-нод (npm) тоже шла через прокси
