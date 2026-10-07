@@ -21,7 +21,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.3.2"
+INST_VER="2.3.3"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
@@ -129,6 +129,20 @@ env_get() { # читает значение из уже существующег
 }
 
 dc() { docker compose --project-directory "$DIR" "$@"; }
+
+# Длинные тихие шаги (скачивание образов, ожидание сертификата) раньше
+# по несколько минут не писали ни строчки. Человек думал, что всё зависло,
+# а SSH-соединение без трафика рвут роутеры и VPN - у подписчика так
+# оборвалась установка. Теперь время от времени пишем, что работа идёт.
+fmt_t() { [ "$1" -ge 60 ] && printf '%d мин %02d сек' $(($1 / 60)) $(($1 % 60)) || printf '%d сек' "$1"; }
+heartbeat() {  # heartbeat PID "что делаем" - ждёт процесс, раз в 15 секунд пишет
+  local t=0
+  while kill -0 "$1" 2>/dev/null; do
+    sleep 1; t=$((t + 1))
+    [ $((t % 15)) -eq 0 ] && say "     ...$2, прошло $(fmt_t "$t")"
+  done
+  return 0
+}
 
 ask_proxy() {   # спрашивает адрес прокси и проверяет, что через него есть интернет
   while :; do
@@ -2116,8 +2130,14 @@ info "Скачиваем образы (самая долгая часть, 1-4 �
 # в реестре их нет, и pull на них падает.
 PULL_SERVICES="postgres n8n"
 [ "$TLS_MODE" = "cloudflare" ] || PULL_SERVICES="$PULL_SERVICES caddy"
+# Качаем в фоне, чтобы писать на экран, что работа идёт (см. heartbeat).
 # shellcheck disable=SC2086
-dc pull -q $PULL_SERVICES 2>/dev/null || dc pull $PULL_SERVICES || die "Не удалось скачать образы Docker.
+( trap - ERR; dc pull -q $PULL_SERVICES ) >/dev/null 2>&1 &
+PULL_PID=$!
+heartbeat "$PULL_PID" "качаем"
+# Не вышло тихо - пробуем ещё раз с подробным выводом, чтобы была видна причина.
+# shellcheck disable=SC2086
+wait "$PULL_PID" || dc pull $PULL_SERVICES || die "Не удалось скачать образы Docker.
 Если сервер в России - вернитесь на шаг 2 и укажите прокси:
 именно через него Docker будет качать образы."
 
@@ -2148,13 +2168,18 @@ fi
 ok "n8n работает внутри сервера"
 
 # --- проверка HTTPS ----------------------------------------------------------
-info "Ждём HTTPS-сертификат (обычно 20-90 секунд)..."
-TLS=нет
-for _ in $(seq 1 30); do
+info "Ждём HTTPS-сертификат (обычно 1-2 минуты, иногда до 10)..."
+say  "  Окно не закрывайте, даже если долго ничего не меняется."
+TLS=нет; T0=$SECONDS; NEXT=30
+while [ $((SECONDS - T0)) -lt 600 ]; do
   if curl -fsS --max-time 10 "https://$FQDN/healthz" 2>/dev/null | grep -q '"ok"'; then
     TLS=да; break
   fi
-  sleep 10
+  sleep 5
+  if [ $((SECONDS - T0)) -ge "$NEXT" ]; then
+    say "     ...ждём сертификат, прошло $(fmt_t $((SECONDS - T0))) из 10 мин"
+    NEXT=$((NEXT + 30))
+  fi
 done
 
 if [ "$TLS" = "да" ]; then

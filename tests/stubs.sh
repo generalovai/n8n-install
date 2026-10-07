@@ -22,6 +22,13 @@ case "$A" in
   *api.telegram.org*getMe*)         echo '{"ok":true,"result":{"username":"moy_n8n_bot"}}';;
   *api.telegram.org*getUpdates*)    echo '{"ok":true,"result":[{"message":{"chat":{"id":123456789}}}]}';;
   *api.telegram.org*sendMessage*)   echo "$A" | grep -o 'text=[^&]*' | head -1 >> /tmp/tg-sent.txt; echo '{"ok":true}';;
+  # сертификат "выдаётся" через CERT_WAIT секунд после первой проверки
+  *https://*healthz*)
+    if [ -n "${CERT_WAIT:-}" ]; then
+      [ -f /tmp/cert-t0 ] || date +%s > /tmp/cert-t0
+      [ $(( $(date +%s) - $(cat /tmp/cert-t0) )) -ge "$CERT_WAIT" ] || exit 22
+    fi
+    echo '{"status":"ok"}';;
   *healthz*)                        echo '{"status":"ok"}';;
   *api.telegram.org*)               exit 0;;
   *) exit 0;;
@@ -38,6 +45,12 @@ case "$*" in
   *"--version"*) echo "Docker version 27.0.0, build abc";;
   *healthz*) echo '{"status":"ok"}';;
   *"api.ipify.org"*) echo "198.51.100.5";;
+  *" pull "*)
+    [ -n "${PULL_SLEEP:-}" ] && sleep "$PULL_SLEEP"
+    case "${PULL_FAIL:-}:$*" in
+      all:*) exit 1;;
+      quiet:*" pull -q "*) exit 1;;
+    esac;;
   *) echo "[docker] $*" >&2;;
 esac
 exit 0

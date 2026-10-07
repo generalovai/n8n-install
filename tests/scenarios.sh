@@ -45,6 +45,26 @@ rm -rf /opt/n8n; run "Ж4: прокси пускает Telegram"               "
 rm -rf /opt/n8n; run "Ж5: без прокси"                            'n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
              check "Ж5: исключения нет"                          grep -q '^NO_PROXY_EXTRA=$' /opt/n8n/.env
 
+# --- долгие шаги пишут, что работа идёт ----------------------------------------
+PLAIN_ANS='n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+rm -rf /opt/n8n; export PULL_SLEEP=20
+             run "З: образы качаются долго"                     "$PLAIN_ANS"
+             check "З: пишет, что качает"                       grep -q 'качаем, прошло 15 сек' /tmp/r.log
+unset PULL_SLEEP; export PULL_FAIL=quiet
+rm -rf /opt/n8n; run "З2: тихое скачивание упало, повтор удался"  "$PLAIN_ANS"
+unset PULL_FAIL; export PULL_FAIL=all
+rm -rf /opt/n8n
+printf "%-52s" "З3: скачать не удалось совсем"
+if printf "$PLAIN_ANS" | bash "${INSTALL_SH:-/work/install.sh}" >/tmp/r.log 2>&1; then
+  echo "ПРОВАЛ (установка не должна была пройти)"; FAILED=1
+elif grep -q 'Не удалось скачать образы Docker' /tmp/r.log; then echo "OK"
+else echo "ПРОВАЛ (нет понятной причины)"; tail -5 /tmp/r.log; FAILED=1; fi
+unset PULL_FAIL; export CERT_WAIT=35; rm -f /tmp/cert-t0
+rm -rf /opt/n8n; run "З4: сертификат выдаётся не сразу"           "$PLAIN_ANS"
+             check "З4: пишет, сколько ждём"                    grep -q 'ждём сертификат, прошло 30 сек из 10 мин' /tmp/r.log
+             check "З4: дождался"                               grep -q 'HTTPS работает' /tmp/r.log
+unset CERT_WAIT
+
 if [ "$FAILED" -ne 0 ]; then
   echo
   echo "ЕСТЬ ПРОВАЛИВШИЕСЯ СЦЕНАРИИ"
