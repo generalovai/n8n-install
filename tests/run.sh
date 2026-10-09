@@ -32,6 +32,10 @@ echo "== 4. Ключевые возможности на месте =="
 bash "$ROOT/tests/features.sh"
 
 echo
+echo "== 4б. Русская раскладка в адресе =="
+bash "$ROOT/tests/domain-layout.sh"
+
+echo
 echo "== 5. Ротация резервных копий =="
 bash "$ROOT/tests/backup-rotation.sh"
 

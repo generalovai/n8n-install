@@ -21,7 +21,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.3.3"
+INST_VER="2.3.4"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
@@ -129,6 +129,49 @@ env_get() { # читает значение из уже существующег
 }
 
 dc() { docker compose --project-directory "$DIR" "$@"; }
+
+# Русская раскладка в адресе. Русские «е», «о», «а», «с», «р» выглядят как
+# английские, но адрес с ними - совсем другой, и его не существует. Скрипт
+# сутки «не видел» правильную A-запись у подписчика именно из-за этого.
+# Ошибкой считаем: латиница и кириллица в одной части адреса (nеw8nеw)
+# или в разных частях имени домена (сайт.ru, site.ру). Домен целиком
+# на кириллице (мойсайт.рф) - настоящий, его не трогаем.
+label_kind() {  # lat | cyr | mix | none
+  # буквы перечислены явно: диапазон [a-z] в некоторых языковых настройках
+  # захватывает и не-английские буквы
+  local l=0 c=0
+  case "$1" in *[abcdefghijklmnopqrstuvwxyz]*) l=1 ;; esac
+  case "$1" in *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) c=1 ;; esac
+  case "$l$c" in 11) echo mix ;; 10) echo lat ;; 01) echo cyr ;; *) echo none ;; esac
+}
+layout_mixup() {  # 0 - если в адресе похоже на русскую раскладку
+  local -a p; local i k n
+  IFS=. read -ra p <<< "$1"
+  n=${#p[@]}
+  for ((i = 0; i < n; i++)); do [ "$(label_kind "${p[i]}")" = mix ] && return 0; done
+  [ "$n" -ge 2 ] || return 1
+  k="$(label_kind "${p[n-2]}")$(label_kind "${p[n-1]}")"
+  [ "$k" = latcyr ] || [ "$k" = cyrlat ]
+}
+mark_cyr() { printf '%s' "$1" | LC_ALL=C.UTF-8 sed 's/[^a-z0-9.-]/[&]/g' 2>/dev/null || printf '%s' "$1"; }
+layout_help() {
+  warn "Часть букв в адресе набрана в русской раскладке: $(mark_cyr "$1")"
+  say  "  Русские буквы в квадратных скобках. На вид они как английские,"
+  say  "  но для интернета это другой адрес, и его не существует."
+  say  "  Переключитесь на английскую раскладку и введите адрес заново."
+}
+
+# DNS-запрос через общедоступные серверы: сначала Cloudflare, потом Google.
+# Сообщения dig об ошибках («no servers could be reached») отбрасываем,
+# иначе они попадают на экран вместо адреса.
+dns_q() {  # dns_q A|NS имя
+  local r srv
+  for srv in 1.1.1.1 8.8.8.8; do
+    r="$(dig +short +time=3 +tries=2 "$1" "$2" @"$srv" 2>/dev/null | grep -v '^;' | sed 's/\.$//' || true)"
+    [ -n "$r" ] && { printf '%s\n' "$r"; return 0; }
+  done
+  return 0
+}
 
 # Длинные тихие шаги (скачивание образов, ожидание сертификата) раньше
 # по несколько минут не писали ни строчки. Человек думал, что всё зависло,
@@ -413,7 +456,12 @@ step "Шаг 2 из 11. Ваш домен"
 FQDN="$(env_get N8N_FQDN || true)"
 if [ -n "$FQDN" ]; then
   say "Найдена прошлая установка на адресе: $B$FQDN$R"
-  ask_yes "Оставить этот же адрес?" "y" || FQDN=""
+  if layout_mixup "$FQDN"; then
+    layout_help "$FQDN"
+    FQDN=""
+  else
+    ask_yes "Оставить этот же адрес?" "y" || FQDN=""
+  fi
 fi
 
 if [ -z "$FQDN" ]; then
@@ -433,7 +481,11 @@ TXT
       *.*.*|*.*) ;;
       *) warn "Это не похоже на адрес. Нужен вид  n8n.мойсайт.ru"; continue ;;
     esac
-    # кириллица в домене: сертификат на такой адрес выдаётся не всегда
+    if layout_mixup "$FQDN"; then
+      layout_help "$FQDN"
+      continue
+    fi
+    # домен целиком на кириллице (.рф): сертификат на такой адрес выдаётся не всегда
     if printf '%s' "$FQDN" | LC_ALL=C grep -q '[^a-z0-9.-]'; then
       warn "В адресе есть буквы не латиницей (например домен в зоне .рф)."
       say  "  С такими адресами HTTPS-сертификат выдаётся не всегда."
@@ -685,7 +737,7 @@ else
 TXT
   while :; do
     info "Проверяем, куда сейчас указывает $FQDN ..."
-    DNS_IP="$(dig +short A "$FQDN" @1.1.1.1 2>/dev/null | tail -n1 || true)"
+    DNS_IP="$(dns_q A "$FQDN" | grep -E '^[0-9.]+$' | tail -n1 || true)"
     if [ "$DNS_IP" = "$SERVER_IP" ]; then
       ok "Домен указывает на этот сервер"
       break
@@ -696,7 +748,7 @@ TXT
     # переведён на чужие DNS - и правки никто не видит. Показываем, где он живёт.
     NS_ZONE="$FQDN"; NS_LIST=""
     while [ "${NS_ZONE#*.}" != "$NS_ZONE" ]; do
-      NS_LIST="$(dig +short NS "$NS_ZONE" @1.1.1.1 2>/dev/null | sed 's/\.$//' | tr '\n' ' ')"
+      NS_LIST="$(dns_q NS "$NS_ZONE" | tr '\n' ' ')"
       [ -n "$NS_LIST" ] && break
       NS_ZONE="${NS_ZONE#*.}"
     done
@@ -711,6 +763,14 @@ TXT
         *)
           say "  Если это не те серверы, где вы правите запись - правки не сработают." ;;
       esac
+    else
+      # не нашёлся даже сам домен - запись тут ни при чём
+      REG_DOMAIN="$(printf '%s' "$FQDN" | awk -F. '{print $(NF-1)"."$NF}')"
+      say "  ${YEL}Домен $REG_DOMAIN в интернете не найден - дело не в записи.${R}"
+      say "  Проверьте адрес на опечатки. Если домен купили только что -"
+      say "  он появляется в интернете за несколько часов после оплаты."
+      say "  Чтобы ввести адрес заново: Ctrl+C, запустите установку снова"
+      say "  и на вопрос «Оставить этот же адрес?» ответьте n."
     fi
     if ask_yes "Запись уже создана - проверить ещё раз?" "y"; then continue; fi
     ask_yes "Продолжить без проверки? (сертификат выдастся позже сам, когда DNS обновится)" "n" && break

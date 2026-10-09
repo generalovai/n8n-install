@@ -36,6 +36,9 @@ esac
 D
 cat > /stub/dig <<'D'
 #!/bin/bash
+# домена с "nosuch" в имени не существует; адрес с кириллицей - тоже
+case "$*" in *nosuch*) exit 0;; esac
+printf '%s' "$*" | LC_ALL=C grep -q '[^ -~]' && exit 0
 echo "203.0.113.77"
 D
 cat > /stub/docker <<'D'
