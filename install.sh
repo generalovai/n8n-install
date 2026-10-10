@@ -21,7 +21,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.3.4"
+INST_VER="2.3.5"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
@@ -345,15 +345,30 @@ mask_proxy() {
 }
 
 # Отправка сообщения в Telegram. Никогда не роняет вызвавший её код:
-# уведомление - вещь полезная, но не критичная.
+# уведомление - вещь полезная, но не критичная. С российских серверов
+# Telegram открывается не всегда, поэтому пробуем через прокси и напрямую,
+# до трёх раз (так же устроен notify.sh, которым шлют уведомления скрипты).
 tg_send() {
   [ -n "${TG_TOKEN:-}" ] && [ -n "${TG_CHAT:-}" ] || return 0
-  curl -sS --max-time 20 -o /dev/null \
-    "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-    --data-urlencode "chat_id=${TG_CHAT}" \
-    --data-urlencode "text=$1" \
-    --data "parse_mode=HTML" \
-    --data "disable_web_page_preview=true" 2>/dev/null || true
+  local try px=""
+  [ -n "${PROXY_URL:-}" ] && px="$(proxy_for_curl "$PROXY_URL")"
+  # прокси, который не пускает к Telegram, пробовать бессмысленно
+  case "${NO_PROXY_EXTRA:-}" in *telegram*) px="" ;; esac
+  tg_post() {
+    curl -fsS --connect-timeout 8 --max-time 20 -o /dev/null "$@" \
+      "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+      --data-urlencode "chat_id=${TG_CHAT}" \
+      --data-urlencode "text=$TG_MSG" \
+      --data "parse_mode=HTML" \
+      --data "disable_web_page_preview=true" 2>/dev/null
+  }
+  TG_MSG="$1"
+  for try in 1 2 3; do
+    if [ -n "$px" ] && tg_post --proxy "$px"; then return 0; fi
+    if tg_post; then return 0; fi
+    [ "$try" -lt 3 ] && sleep 5
+  done
+  return 0
 }
 
 # curl, который при необходимости идёт через прокси пользователя.
@@ -566,33 +581,64 @@ if [ -n "$PROXY_URL" ]; then
     *)                      PROXY_KIND=http;   CONTAINER_PROXY="$PROXY_URL" ;;
   esac
   ok "Прокси будет использоваться: $( [ "$PROXY_KIND" = socks5 ] && echo 'socks5 (поднимем мост для контейнеров)' || echo 'http' )"
-
-  # Некоторые прокси молча закрывают Telegram (отвечают 403), хотя остальное
-  # пропускают. Тогда n8n не может ни проверить токен бота, ни писать в чат.
-  # Проверяем сразу: если через прокси Telegram не открылся, а напрямую
-  # открывается - пускаем его мимо прокси.
-  NO_PROXY_EXTRA="$(env_get NO_PROXY_EXTRA || true)"   # прежнее решение, если проверка ничего не покажет
-  tg_code() { curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$@" https://api.telegram.org/bot123/getMe 2>/dev/null || true; }
-  info "Проверяю, пускает ли прокси к Telegram..."
-  case "$(tg_code --proxy "$(proxy_for_curl "$PROXY_URL")")" in
-    401|404)
-      NO_PROXY_EXTRA=""
-      ok "Telegram через прокси открывается" ;;
-    *)
-      case "$(tg_code)" in
-        401|404)
-          NO_PROXY_EXTRA=",api.telegram.org,.telegram.org"
-          ok "Ваш прокси не пускает к Telegram, но с сервера он открывается напрямую."
-          say "  Telegram будет ходить мимо прокси, остальное - как раньше." ;;
-        *)
-          warn "Telegram не открывается ни через прокси, ни напрямую."
-          say  "  Установка пройдёт, но бот Telegram в n8n работать не будет."
-          say  "  Напишите в поддержку прокси: «через ваш прокси не открывается api.telegram.org»." ;;
-      esac ;;
-  esac
 else
-  NO_PROXY_EXTRA=""
   ok "Работаем без прокси"
+fi
+
+# ---------- Telegram: каким путём он открывается -----------------------------
+# В России Telegram режут частично и по-разному: с одного сервера не отвечает
+# один его адрес, с другого - другой, а DNS отдаёт то один, то другой (у
+# подписчиков на Beget не отвечал 149.154.166.110, а .167.220 работал).
+# Некоторые прокси Telegram не пропускают вовсе. Поэтому проверяем и прокси,
+# и КАЖДЫЙ адрес Telegram напрямую: один удачный запрос ничего не доказывает.
+NO_PROXY_EXTRA="$(env_get NO_PROXY_EXTRA || true)"   # прежнее решение, если проверка ничего не покажет
+[ -n "$PROXY_URL" ] || NO_PROXY_EXTRA=""
+tg_ok() {
+  case "$(curl -sS --connect-timeout 6 --max-time 12 -o /dev/null -w '%{http_code}' "$@" \
+            https://api.telegram.org/bot123/getMe 2>/dev/null || true)" in
+    401|404) return 0 ;;
+  esac
+  return 1
+}
+tg_direct() {  # 0 - если напрямую отвечает хоть один адрес; неживые - в TG_DEAD
+  local ip alive=1
+  TG_DEAD=""
+  while read -r ip; do
+    if tg_ok --resolve "api.telegram.org:443:$ip"; then alive=0; else TG_DEAD="$TG_DEAD $ip"; fi
+  done < <( { dns_q A api.telegram.org | grep -E '^[0-9.]+$' || true; printf '%s\n' 149.154.167.220 149.154.166.110; } | sort -u)
+  TG_DEAD="${TG_DEAD# }"
+  return "$alive"
+}
+info "Проверяю, открывается ли Telegram (до минуты)..."
+if [ -n "$PROXY_URL" ] && tg_ok --proxy "$(proxy_for_curl "$PROXY_URL")"; then
+  NO_PROXY_EXTRA=""
+  ok "Telegram открывается через ваш прокси"
+elif tg_direct; then
+  [ -n "$PROXY_URL" ] && NO_PROXY_EXTRA=",api.telegram.org,.telegram.org"
+  if [ -z "$TG_DEAD" ]; then
+    if [ -n "$PROXY_URL" ]; then
+      ok "Ваш прокси не пускает к Telegram, но с сервера он открывается напрямую."
+      say "  Telegram будет ходить мимо прокси, остальное - как раньше."
+    else
+      ok "Telegram открывается"
+    fi
+  else
+    warn "Telegram с этого сервера открывается через раз: часть его адресов не отвечает ($TG_DEAD)."
+    say  "  Так бывает на серверах в России. Бот в n8n будет то работать, то нет."
+    [ -n "$PROXY_URL" ] && say "  Ваш прокси Telegram не пропускает, поэтому пускаем его напрямую - лучше так, чем никак."
+    say  "  Надёжное решение - прокси, который пропускает Telegram (спросите у продавца)."
+    say  "  Когда будет такой - запустите установщик ещё раз и введите его на шаге 3."
+  fi
+else
+  warn "Telegram не открывается с этого сервера ни через прокси, ни напрямую."
+  say  "  Установка пройдёт, но бот Telegram в n8n работать не будет."
+  if [ -n "$PROXY_URL" ]; then
+    say "  Напишите в поддержку прокси: «через ваш прокси не открывается api.telegram.org»"
+    say "  или возьмите прокси, который пропускает Telegram, и запустите установщик ещё раз."
+  else
+    say "  Нужен прокси, который пропускает Telegram: запустите установщик ещё раз"
+    say "  и укажите его на шаге 3."
+  fi
 fi
 
 # ---------- 3. как получать HTTPS-сертификат ---------------------------------
@@ -1812,16 +1858,32 @@ cat > "$DIR/notify.sh" <<'EOF'
 #!/usr/bin/env bash
 # Отправляет сообщение в Telegram, если уведомления настроены.
 # Если нет - молча выходит. Никогда не мешает работе того, кто её вызвал.
+#
+# С российских серверов Telegram открывается не всегда: часть его адресов
+# режут, а некоторые прокси Telegram не пропускают. Поэтому пробуем и через
+# прокси, и напрямую, до трёх раз - сообщение о беде не должно потеряться.
 DIR=/opt/n8n
-TOKEN="$(grep '^TG_TOKEN=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | sed 's/\$\$/$/g')"
-CHAT="$(grep '^TG_CHAT=' "$DIR/.env" 2>/dev/null | cut -d= -f2-)"
+g() { grep "^$1=" "$DIR/.env" 2>/dev/null | cut -d= -f2- | sed 's/\$\$/$/g'; }
+TOKEN="$(g TG_TOKEN)"; CHAT="$(g TG_CHAT)"
 [ -n "$TOKEN" ] && [ -n "$CHAT" ] || exit 0
-curl -sS --max-time 20 -o /dev/null \
-  "https://api.telegram.org/bot${TOKEN}/sendMessage" \
-  --data-urlencode "chat_id=${CHAT}" \
-  --data-urlencode "text=$1" \
-  --data "parse_mode=HTML" \
-  --data "disable_web_page_preview=true" 2>/dev/null || true
+PROXY="$(g PROXY_URL)"; PROXY="${PROXY/#socks5:\/\//socks5h://}"
+# прокси, который не пускает к Telegram, пробовать бессмысленно
+case "$(g NO_PROXY_EXTRA)" in *telegram*) PROXY="" ;; esac
+MSG="$1"
+send() {
+  curl -fsS --connect-timeout 8 --max-time 20 -o /dev/null "$@" \
+    "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+    --data-urlencode "chat_id=${CHAT}" \
+    --data-urlencode "text=$MSG" \
+    --data "parse_mode=HTML" \
+    --data "disable_web_page_preview=true" 2>/dev/null
+}
+for try in 1 2 3; do
+  if [ -n "$PROXY" ] && send --proxy "$PROXY"; then exit 0; fi
+  if send; then exit 0; fi
+  [ "$try" -lt 3 ] && sleep 10
+done
+exit 0
 EOF
 chmod +x "$DIR/notify.sh"
 
@@ -1949,6 +2011,54 @@ g() { grep "^$1=" .env 2>/dev/null | cut -d= -f2-; }
     else
       echo "из контейнера n8n:      через прокси, адрес $CIP"
     fi
+  fi
+
+  echo
+  echo "=== TELEGRAM ==="
+  # С российских серверов Telegram режут частично: один его адрес не отвечает,
+  # соседний работает. Проверяем каждый путь отдельно и пишем вывод словами.
+  tgc() { curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 6 --max-time 12 "$@" \
+            https://api.telegram.org/bot123/getMe 2>/dev/null || true; }
+  live() { case "$1" in 401|404) return 0 ;; esac; return 1; }
+  TP=""; TA=""; TD=""
+  TPU="$(g PROXY_URL | sed 's/\$\$/$/g')"
+  if [ -n "$TPU" ]; then
+    if live "$(tgc --proxy "${TPU/#socks5:\/\//socks5h://}")"; then
+      TP=да; echo "через прокси:        открывается"
+    else
+      TP=нет; echo "через прокси:        НЕ ОТКРЫВАЕТСЯ (прокси не пускает к Telegram)"
+    fi
+  fi
+  while read -r ip; do
+    if live "$(tgc --resolve "api.telegram.org:443:$ip")"; then
+      TA="$TA $ip"; printf 'напрямую %-16s открывается\n' "$ip:"
+    else
+      TD="$TD $ip"; printf 'напрямую %-16s НЕ ОТВЕЧАЕТ\n' "$ip:"
+    fi
+  done < <( { dig +short A api.telegram.org @1.1.1.1 2>/dev/null | grep -E '^[0-9.]+$' || true
+              printf '%s\n' 149.154.167.220 149.154.166.110; } | sort -u)
+  CT="$(docker compose exec -T n8n node -e "fetch('https://api.telegram.org/bot123/getMe').then(r=>console.log(r.status)).catch(e=>console.log('ОШИБКА',(e.cause&&e.cause.code)||e.message))" 2>/dev/null | tail -n1 | tr -d '\r')"
+  echo "из контейнера n8n:   ${CT:-нет ответа}"
+  if live "$CT"; then
+    if [ -n "$TD" ] && [ "$TP" != да ]; then
+      echo "ИТОГ: сейчас Telegram из n8n работает, но часть его адресов с сервера"
+      echo "      не отвечает - бот может сбоить. Надёжно: прокси, который пропускает Telegram."
+    else
+      echo "ИТОГ: Telegram из n8n работает."
+    fi
+  elif [ "$TP" = да ]; then
+    echo "ИТОГ: прокси пропускает Telegram, а n8n до него не доходит."
+    echo "      Запустите установщик ещё раз - он перепишет настройки."
+  elif [ -z "$TA" ]; then
+    echo "ИТОГ: Telegram с этого сервера не открывается${TP:+ ни через прокси,} ни напрямую."
+    echo "      Нужен прокси, который пропускает Telegram (спросите у продавца прокси)."
+  elif [ -n "$TD" ]; then
+    echo "ИТОГ: провайдер сервера блокирует часть адресов Telegram${TP:+, а прокси его не пропускает}."
+    echo "      Нужен прокси, который пропускает Telegram: возьмите такой и запустите"
+    echo "      установщик ещё раз, на шаге 3 введите новый прокси."
+  else
+    echo "ИТОГ: напрямую Telegram открывается, а n8n до него не доходит."
+    echo "      Запустите установщик ещё раз - он сам пустит Telegram мимо прокси."
   fi
 
   echo

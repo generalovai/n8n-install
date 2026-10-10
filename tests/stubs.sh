@@ -17,11 +17,19 @@ case "$A" in
     case "${TG_MODE:-ok}" in
       proxy_blocked) case "$A" in *--proxy*) printf 000; exit 7;; *) printf 404;; esac;;
       both_blocked)  printf 000; exit 7;;
+      # как на Beget: прокси Telegram не пускает, напрямую один адрес мёртв
+      flaky) case "$A" in *--proxy*) printf 000; exit 7;; *149.154.166.110*) printf 000; exit 28;; *) printf 404;; esac;;
       *)             printf 404;;
     esac;;
   *api.telegram.org*getMe*)         echo '{"ok":true,"result":{"username":"moy_n8n_bot"}}';;
   *api.telegram.org*getUpdates*)    echo '{"ok":true,"result":[{"message":{"chat":{"id":123456789}}}]}';;
-  *api.telegram.org*sendMessage*)   echo "$A" | grep -o 'text=[^&]*' | head -1 >> /tmp/tg-sent.txt; echo '{"ok":true}';;
+  *api.telegram.org*sendMessage*)
+    echo "$A" >> /tmp/tg-calls.txt
+    case "${SEND_MODE:-ok}:$A" in
+      proxyfail:*--proxy*) exit 56;;
+      allfail:*)           exit 7;;
+    esac
+    echo "$A" | grep -o 'text=[^&]*' | head -1 >> /tmp/tg-sent.txt; echo '{"ok":true}';;
   # сертификат "выдаётся" через CERT_WAIT секунд после первой проверки
   *https://*healthz*)
     if [ -n "${CERT_WAIT:-}" ]; then
@@ -48,6 +56,7 @@ case "$*" in
   *"--version"*) echo "Docker version 27.0.0, build abc";;
   *healthz*) echo '{"status":"ok"}';;
   *"api.ipify.org"*) echo "198.51.100.5";;
+  *"api.telegram.org"*) [ "${CONT_TG:-ok}" = ok ] && echo 404 || echo "ОШИБКА ETIMEDOUT";;
   *" pull "*)
     [ -n "${PULL_SLEEP:-}" ] && sleep "$PULL_SLEEP"
     case "${PULL_FAIL:-}:$*" in

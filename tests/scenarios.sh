@@ -84,6 +84,44 @@ rm -rf /opt/n8n
              run "И4: такого домена нет"                         'n8n.nosuch.ru\nn\nn\nn\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
              check "И4: сказал, что не найден сам домен"       grep -q 'Домен nosuch.ru в интернете не найден' /tmp/r.log
 
+# --- Telegram «через раз», как на Beget: один адрес мёртв ---------------------
+export TG_MODE=flaky
+rm -rf /opt/n8n; run "К: прокси не пускает Telegram, напрямую через раз" "$HTTP_PROXY_ANS"
+             check "К: честно сказал, что через раз"            grep -q 'открывается через раз' /tmp/r.log
+             check "К: назвал мёртвый адрес"                    grep -q '149.154.166.110' /tmp/r.log
+             check "К: обход всё равно включён"                 grep -q '^NO_PROXY_EXTRA=,api.telegram.org' /opt/n8n/.env
+rm -rf /opt/n8n; run "К2: без прокси, Telegram через раз"           "$PLAIN_ANS"
+             check "К2: предупредил"                            grep -q 'открывается через раз' /tmp/r.log
+             check "К2: без прокси исключения нет"              grep -q '^NO_PROXY_EXTRA=$' /opt/n8n/.env
+export TG_MODE=ok
+rm -rf /opt/n8n; run "К3: без прокси, Telegram в порядке"           "$PLAIN_ANS"
+             check "К3: сказал, что открывается"                grep -q 'Telegram открывается' /tmp/r.log
+
+# --- уведомления: через прокси, потом напрямую, до трёх попыток ---------------
+rm -rf /opt/n8n; run "Л: установка с прокси для проверки уведомлений" "$HTTP_PROXY_ANS"
+sed -i 's/^TG_TOKEN=.*/TG_TOKEN=123:abc/; s/^TG_CHAT=.*/TG_CHAT=555/' /opt/n8n/.env
+rm -f /tmp/tg-calls.txt /tmp/tg-sent.txt
+SEND_MODE=proxyfail /opt/n8n/notify.sh "проверка-1"
+check "Л: прокси не пустил - ушло напрямую"        grep -q 'проверка-1' /tmp/tg-sent.txt
+check "Л: сначала пробовал через прокси"           sh -c 'head -1 /tmp/tg-calls.txt | grep -q -- --proxy'
+rm -f /tmp/tg-calls.txt
+SEND_MODE=allfail /opt/n8n/notify.sh "проверка-2"; RC=$?
+check "Л2: всё недоступно - не падает"             test "$RC" -eq 0
+check "Л2: три попытки, каждая двумя путями"       test "$(wc -l < /tmp/tg-calls.txt)" -eq 6
+sed -i 's/^NO_PROXY_EXTRA=.*/NO_PROXY_EXTRA=,api.telegram.org,.telegram.org/' /opt/n8n/.env
+rm -f /tmp/tg-calls.txt
+/opt/n8n/notify.sh "проверка-3"
+check "Л3: прокси без Telegram - сразу напрямую"   sh -c '! grep -q -- --proxy /tmp/tg-calls.txt && grep -q проверка-3 /tmp/tg-sent.txt'
+
+# --- diagnose.sh: блок TELEGRAM и вывод словами -------------------------------
+sed -i 's/^NO_PROXY_EXTRA=.*/NO_PROXY_EXTRA=/' /opt/n8n/.env
+diag() { TG_MODE=$1 CONT_TG=$2 /opt/n8n/diagnose.sh > /tmp/d.txt 2>&1; grep -q -- "$3" /tmp/d.txt || { echo; sed -n '/=== TELEGRAM/,/^$/p' /tmp/d.txt; return 1; }; }
+check "М: всё работает"                            diag ok ok 'ИТОГ: Telegram из n8n работает.'
+check "М2: как на Beget - прокси не пускает"       diag flaky fail 'блокирует часть адресов Telegram, а прокси его не пропускает'
+check "М3: не открывается никак"                   diag both_blocked fail 'не открывается ни через прокси, ни напрямую'
+check "М4: прокси пускает, n8n - нет"              diag ok fail 'прокси пропускает Telegram, а n8n до него не доходит'
+check "М5: мёртвый адрес назван"                   diag flaky fail '149.154.166.110: *НЕ ОТВЕЧАЕТ'
+
 if [ "$FAILED" -ne 0 ]; then
   echo
   echo "ЕСТЬ ПРОВАЛИВШИЕСЯ СЦЕНАРИИ"
