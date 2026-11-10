@@ -122,6 +122,15 @@ check "М3: не открывается никак"                   diag both_
 check "М4: прокси пускает, n8n - нет"              diag ok fail 'прокси пропускает Telegram, а n8n до него не доходит'
 check "М5: мёртвый адрес назван"                   diag flaky fail '149.154.166.110: *НЕ ОТВЕЧАЕТ'
 
+# --- повторный запуск не перескакивает на новую большую версию n8n ------------
+rm -rf /opt/n8n /tmp/maj; run "Н: первая установка"                 "$PLAIN_ANS"
+export MAJOR_TEST=1
+             run "Н: повторный запуск, вышел n8n 3"                    'y\nn\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
+             check "Н: оставил прежнюю версию"                     grep -q 'Оставляем вашу версию n8n 2.46.7' /tmp/r.log
+             check "Н: сказал, что вышла новая версия"           grep -q 'Вышла новая большая версия n8n 3.1.0' /tmp/r.log
+             check "Н: под latest прежний образ"                   grep -qx old /tmp/maj/latest
+unset MAJOR_TEST
+
 if [ "$FAILED" -ne 0 ]; then
   echo
   echo "ЕСТЬ ПРОВАЛИВШИЕСЯ СЦЕНАРИИ"

@@ -51,6 +51,20 @@ echo "203.0.113.77"
 D
 cat > /stub/docker <<'D'
 #!/bin/bash
+# MAJOR_TEST: на сервере уже стоит n8n 2.x, а в реестре вышла 3.x
+if [ -n "${MAJOR_TEST:-}" ]; then
+  M=/tmp/maj; mkdir -p $M; [ -f $M/latest ] || echo old > $M/latest
+  echo 2.46.7 > $M/ver_old; echo 3.1.0 > $M/ver_new
+  last="${*: -1}"
+  case "$*" in
+    *" ps -q n8n"*) echo abc123; exit 0;;
+    *image.version*) case "$last" in old|new) cat "$M/ver_$last";; *) cat "$M/ver_$(cat $M/latest)";; esac; exit 0;;
+    *"image inspect"*) cat $M/latest; exit 0;;
+    *" pull "*) echo new > $M/latest; exit 0;;
+    "tag "*n8n:latest) echo "$2" > $M/latest; exit 0;;
+    "tag "*) exit 0;;
+  esac
+fi
 case "$*" in
   *"compose version"*) echo "Docker Compose version v2.30.0";;
   *"--version"*) echo "Docker version 27.0.0, build abc";;

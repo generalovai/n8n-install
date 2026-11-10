@@ -36,6 +36,10 @@ echo "== 4б. Русская раскладка в адресе =="
 bash "$ROOT/tests/domain-layout.sh"
 
 echo
+echo "== 4в. Автообновление и большие версии n8n =="
+bash "$ROOT/tests/autoupdate-major.sh"
+
+echo
 echo "== 5. Ротация резервных копий =="
 bash "$ROOT/tests/backup-rotation.sh"
 

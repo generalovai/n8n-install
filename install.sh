@@ -21,7 +21,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.3.5"
+INST_VER="2.3.6"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
@@ -1677,6 +1677,9 @@ cd "$DIR"
 log() { printf '%s  %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG"; }
 
 version_now() { docker compose exec -T n8n n8n --version 2>/dev/null | tr -d '\r' | tail -n1; }
+# Версия n8n внутри образа - из его метки, без запуска контейнера
+img_ver() { docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true; }
+major()   { local v="${1%%.*}"; printf '%s' "${v//[!0-9]/}"; }
 
 wait_healthy() { # wait_healthy СЕКУНД
   local limit="$1" waited=0
@@ -1710,6 +1713,49 @@ if [ "$OLD_ID" = "$NEW_ID" ] && [ "$FORCE" != "--force" ]; then
   exit 0
 fi
 
+# Большое обновление (2.x -> 3.x) само не ставим. В таких версиях n8n убирает
+# старые ноды и меняет поведение: n8n запустится, а часть воркфлоу тихо
+# перестанет работать - откатываться будет не на что. Ставит человек сам,
+# когда готов:  /opt/n8n/update.sh
+NEW_VER="$(img_ver "$NEW_ID")"
+OLD_MAJ="$(major "$OLD_VER")"; [ -n "$OLD_MAJ" ] || OLD_MAJ="$(major "$(img_ver "$OLD_ID")")"
+NEW_MAJ="$(major "$NEW_VER")"
+if [ "$OLD_ID" != "$NEW_ID" ] && [ "$OLD_ID" != none ] && [ -n "$OLD_MAJ" ] && [ -n "$NEW_MAJ" ] \
+   && [ "$NEW_MAJ" -gt "$OLD_MAJ" ]; then
+  keep_old() {  # вернуть на место прежний образ, новый держать под своим именем
+    docker tag "$NEW_ID" "docker.n8n.io/n8nio/n8n:new-major" >/dev/null 2>&1
+    docker tag "$OLD_ID" "$IMG" >/dev/null 2>&1
+    docker image prune -f >/dev/null 2>&1 || true
+  }
+  if [ "$FORCE" != "--force" ]; then
+    keep_old
+    log "вышел n8n $NEW_VER - это большое обновление, само не ставим (сейчас $OLD_VER)"
+    if [ ! -f "$DIR/.major-notified-$NEW_MAJ" ]; then
+      "$DIR/notify.sh" "🆕 <b>Вышел n8n $NEW_MAJ</b>
+
+Сейчас у вас <code>$OLD_VER</code>, вышла <code>$NEW_VER</code>.
+
+Это большое обновление: в нём n8n убирает старые ноды и меняет поведение, часть воркфлоу может перестать работать. Поэтому сам сервер его <b>не ставит</b> — мелкие обновления версии $OLD_MAJ по-прежнему приходят сами.
+
+Когда будете готовы, выполните на сервере:
+<code>/opt/n8n/update.sh</code>
+Перед обновлением сделается резервная копия."
+      touch "$DIR/.major-notified-$NEW_MAJ"
+    fi
+    exit 0
+  fi
+  if [ -t 0 ]; then
+    echo
+    echo "Это большое обновление n8n: $OLD_VER -> $NEW_VER."
+    echo "В нём убраны старые ноды и изменено поведение - часть воркфлоу"
+    echo "может перестать работать. Перед обновлением сделается резервная копия."
+    printf 'Обновляться? (y/n) [n]: '
+    read -r ANS || ANS=""
+    case "$ANS" in y|Y|yes|Yes|д|Д|да|Да) ;; *) keep_old; log "большое обновление отложено"; echo "Хорошо, оставляем $OLD_VER."; exit 0 ;; esac
+  fi
+  log "большое обновление $OLD_VER -> $NEW_VER запущено вручную"
+fi
+
 # Пока идём - сторож должен молчать: перезапуск n8n это не авария
 touch "$DIR/.update-in-progress"
 trap 'rm -f "$DIR/.update-in-progress"' EXIT
@@ -1730,8 +1776,9 @@ if wait_healthy 300; then
 Стало: <code>$NEW_VER</code>
 
 ✅ Всё поднялось и работает. Резервная копия перед обновлением сохранена."
+  docker rmi "docker.n8n.io/n8nio/n8n:new-major" >/dev/null 2>&1 || true
   docker image prune -f >/dev/null 2>&1 || true
-  rm -f "$ALERT"
+  rm -f "$ALERT" "$DIR"/.major-notified-*
   exit 0
 fi
 
@@ -2295,6 +2342,16 @@ if [ "$TLS_MODE" = "cloudflare" ] || [ "$PROXY_KIND" = "socks5" ]; then
   ok "Образы собраны"
 fi
 
+# Какая версия n8n стоит сейчас (при повторном запуске). Нужна, чтобы
+# повторный запуск - например, ради смены прокси - не перескочил на новую
+# большую версию n8n (2.x -> 3.x). Её человек ставит сам: /opt/n8n/update.sh
+N8N_IMG="docker.n8n.io/n8nio/n8n:latest"
+n8n_img_ver() { docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true; }
+N8N_OLD_ID=""
+if [ -n "$(dc ps -q n8n 2>/dev/null || true)" ]; then
+  N8N_OLD_ID="$(docker image inspect --format '{{.Id}}' "$N8N_IMG" 2>/dev/null || true)"
+fi
+
 info "Скачиваем образы (самая долгая часть, 1-4 минуты)..."
 # Собираемые локально образы (caddy для Cloudflare, мост socks5) пропускаем:
 # в реестре их нет, и pull на них падает.
@@ -2310,6 +2367,20 @@ heartbeat "$PULL_PID" "качаем"
 wait "$PULL_PID" || dc pull $PULL_SERVICES || die "Не удалось скачать образы Docker.
 Если сервер в России - вернитесь на шаг 2 и укажите прокси:
 именно через него Docker будет качать образы."
+
+if [ -n "$N8N_OLD_ID" ]; then
+  N8N_NEW_ID="$(docker image inspect --format '{{.Id}}' "$N8N_IMG" 2>/dev/null || true)"
+  N8N_OV="$(n8n_img_ver "$N8N_OLD_ID")"; N8N_NV="$(n8n_img_ver "$N8N_NEW_ID")"
+  N8N_OM="${N8N_OV%%.*}"; N8N_NM="${N8N_NV%%.*}"
+  if [ "$N8N_NEW_ID" != "$N8N_OLD_ID" ] && [ -n "$N8N_OM" ] && [ -n "$N8N_NM" ] \
+     && [ "${N8N_NM//[!0-9]/}" -gt "${N8N_OM//[!0-9]/}" ] 2>/dev/null; then
+    docker tag "$N8N_NEW_ID" "docker.n8n.io/n8nio/n8n:new-major" >/dev/null 2>&1 || true
+    docker tag "$N8N_OLD_ID" "$N8N_IMG" >/dev/null 2>&1 || true
+    ok "Оставляем вашу версию n8n $N8N_OV"
+    say "  Вышла новая большая версия n8n $N8N_NV. В ней убраны старые ноды,"
+    say "  поэтому сама она не ставится. Когда будете готовы:  $B/opt/n8n/update.sh$R"
+  fi
+fi
 
 info "Стартуем..."
 # --remove-orphans убирает контейнеры, которые больше не нужны:
