@@ -4,10 +4,14 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 
-gen() { # gen ПАПКА ОТВЕТЫ
+gen() { # gen ПАПКА ОТВЕТЫ [ПРАВКА_ENV ОТВЕТЫ_ПОВТОРА]
+  # С правкой: установить, поменять .env и запустить установщик ещё раз -
+  # так проверяется режим Cloudflare у старых установок (новым его не предлагаем).
+  local again=""
+  [ -n "${3:-}" ] && again="$3; printf '$4' | bash /work/install.sh >/dev/null 2>&1;"
   docker run --rm -v "$ROOT/tests/stubs.sh:/stubs.sh:ro" -v "$1:/out" \
     -v "$ROOT/install.sh:/work/install.sh:ro" ubuntu:22.04 bash -c \
-    "bash /stubs.sh; export PATH=/stub:\$PATH; printf '$2' | bash /work/install.sh >/dev/null 2>&1; cp -r /opt/n8n/. /out/"
+    "bash /stubs.sh; export PATH=/stub:\$PATH; printf '$2' | bash /work/install.sh >/dev/null 2>&1; $again cp -r /opt/n8n/. /out/"
 }
 
 # Файлы внутри контейнера создаются от root. На Linux-раннере обычный
@@ -18,12 +22,15 @@ own() { docker run --rm -v "$WORK:/w" alpine chown -R "$(id -u):$(id -g)" /w >/d
 for mode in plain cloudflare; do
   D="$WORK/$mode"; mkdir -p "$D"
   if [ "$mode" = plain ]; then
-    # домен, прокси?н, Cloudflare?н, почта, часовой пояс, автообновление?д, уведомления?н
-    gen "$D" 'n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+    # домен, прокси?н, почта, часовой пояс, автообновление?д, уведомления?н
+    gen "$D" 'n8n.mysite.ru\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
   else
-    # домен, прокси?д, адрес, подтверждение адреса, Cloudflare?д, токен,
-    # оранжевое облако?д, почта, часовой пояс, автообновление?д, уведомления?н
-    gen "$D" 'n8n.example.ru\ny\nsocks5://u:secret@1.2.3.4:1080\ny\ny\ntoken123\ny\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
+    # старая установка (до 2.3.8) с токеном Cloudflare и оранжевым облаком, socks5-прокси:
+    # ставим, вписываем в .env то, что тогда записал бы установщик, и запускаем повторно
+    # (адрес оставить?д, прокси оставить?д, почта, часовой пояс, уведомления?н)
+    gen "$D" 'n8n.example.ru\ny\nsocks5://u:secret@1.2.3.4:1080\ny\nadmin@e.ru\nEurope/Moscow\ny\nn\n' \
+      "sed -i 's/^TLS_MODE=.*/TLS_MODE=cloudflare/; s/^CF_PROXIED=.*/CF_PROXIED=true/' /opt/n8n/.env; echo CF_API_TOKEN=token123 >> /opt/n8n/.env" \
+      'y\ny\nadmin@e.ru\nEurope/Moscow\nn\n'
   fi
   own
 

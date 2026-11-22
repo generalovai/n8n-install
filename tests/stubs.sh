@@ -46,6 +46,7 @@ cat > /stub/dig <<'D'
 #!/bin/bash
 # домена с "nosuch" в имени не существует; адрес с кириллицей - тоже
 case "$*" in *nosuch*) exit 0;; esac
+case "$*" in *orange*) echo "104.21.33.7"; exit 0;; esac   # адрес Cloudflare = оранжевое облако
 printf '%s' "$*" | LC_ALL=C grep -q '[^ -~]' && exit 0
 echo "203.0.113.77"
 D
@@ -66,6 +67,7 @@ if [ -n "${MAJOR_TEST:-}" ]; then
   esac
 fi
 case "$*" in
+  *" up -d"*) [ -n "${UP_FAIL:-}" ] && { echo "Error response from daemon: something bad happened" >&2; exit 1; };;
   *"compose version"*) echo "Docker Compose version v2.30.0";;
   *"--version"*) echo "Docker version 27.0.0, build abc";;
   *healthz*) echo '{"status":"ok"}';;
@@ -87,6 +89,19 @@ cat > /stub/ufw <<'D'
 D
 cat > /stub/systemctl <<'D'
 #!/bin/bash
+# «disable --now» освобождает порты, если программа не упрямая (STUBBORN)
+case "$*" in *"disable --now"*) echo "$*" >> /tmp/disabled; [ -n "${STUBBORN:-}" ] || rm -f /tmp/busy;; esac
 exit 0
+D
+# ss: кто слушает порты. Занятые порты задаются файлом /tmp/busy
+cat > /stub/ss <<'D'
+#!/bin/bash
+[ -f /tmp/busy ] && cat /tmp/busy
+exit 0
+D
+# ps -o unit=: к какой службе systemd относится процесс
+cat > /stub/ps <<'D'
+#!/bin/bash
+echo "${PS_UNIT-nginx.service}"
 D
 chmod +x /stub/*

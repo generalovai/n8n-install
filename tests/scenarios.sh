@@ -12,28 +12,34 @@ run() {
     echo "ПРОВАЛ код=$c ошибок=$e"; tail -8 /tmp/r.log; FAILED=1
   fi
 }
-rm -rf /opt/n8n; run "А: обычный домен, без прокси"            'n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
-             run "А2: повторный запуск"                        'y\nn\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
-rm -rf /opt/n8n; run "Б: Cloudflare + socks5 + оранжевое"      'n8n.example.ru\ny\nsocks5://u:secret@1.2.3.4:1080\ny\ny\nfaketoken123\ny\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
-             # у сценария Б сохранён прокси: второй ответ - "оставить его"
-             run "Б2: повторный запуск"                        'y\ny\ny\nadmin@e.ru\nEurope/Moscow\nn\n'
-rm -rf /opt/n8n; run "В: обычный домен + http-прокси"          'n8n.mysite.ru\ny\nhttp://u:p@10.0.0.1:3128\ny\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
-rm -rf /opt/n8n; run "Г: Cloudflare без прокси, серое облако"  'n8n.example.ru\nn\ny\nfaketoken123\nn\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
-rm -rf /opt/n8n; run "Д: домен без поддомена"                  'mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
-rm -rf /opt/n8n; run "Е: пароль прокси с долларом"             'n8n.mysite.ru\ny\nsocks5://u:pa$w0rd@1.2.3.4:1080\ny\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
-
-# --- прокси, который закрывает Telegram ---------------------------------------
 check() {  # check "что проверяем" команда...
   printf "%-52s" "$1"; shift
   if "$@" >/dev/null 2>&1; then echo "OK"; else echo "ПРОВАЛ"; FAILED=1; fi
 }
-HTTP_PROXY_ANS='n8n.mysite.ru\ny\nhttp://u:p@10.0.0.1:3128\ny\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+rm -rf /opt/n8n; run "А: обычный домен, без прокси"            'n8n.mysite.ru\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+             run "А2: повторный запуск"                        'y\nn\nadmin@m.ru\nEurope/Moscow\nn\n'
+rm -rf /opt/n8n; run "Б: socks5-прокси"                       'n8n.example.ru\ny\nsocks5://u:secret@1.2.3.4:1080\ny\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
+             # у сценария Б сохранён прокси: второй ответ - "оставить его"
+             run "Б2: повторный запуск"                        'y\ny\nadmin@e.ru\nEurope/Moscow\nn\n'
+rm -rf /opt/n8n; run "В: обычный домен + http-прокси"          'n8n.mysite.ru\ny\nhttp://u:p@10.0.0.1:3128\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+rm -rf /opt/n8n; run "Г: старая установка с токеном Cloudflare"   'n8n.example.ru\nn\nadmin@e.ru\nEurope/Moscow\ny\nn\n'
+sed -i 's/^TLS_MODE=.*/TLS_MODE=cloudflare/; s/^CF_PROXIED=.*/CF_PROXIED=true/' /opt/n8n/.env; echo 'CF_API_TOKEN=oldtoken123' >> /opt/n8n/.env
+             run "Г2: её повторный запуск"                     'y\nn\nadmin@e.ru\nEurope/Moscow\nn\n'
+             check "Г2: режим Cloudflare сохранён"            grep -q '^TLS_MODE=cloudflare' /opt/n8n/.env
+             check "Г2: токен сохранён"                       grep -q '^CF_API_TOKEN=oldtoken123' /opt/n8n/.env
+             check "Г2: сертификат через DNS Cloudflare"      grep -q 'dns cloudflare' /opt/n8n/caddy_config/Caddyfile
+             check "Г2: про токен не спрашивал"               sh -c '! grep -qi "токен Cloudflare" /tmp/r.log'
+rm -rf /opt/n8n; run "Д: домен без поддомена"                  'mysite.ru\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+rm -rf /opt/n8n; run "Е: пароль прокси с долларом"             'n8n.mysite.ru\ny\nsocks5://u:pa$w0rd@1.2.3.4:1080\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+
+# --- прокси, который закрывает Telegram ---------------------------------------
+HTTP_PROXY_ANS='n8n.mysite.ru\ny\nhttp://u:p@10.0.0.1:3128\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
 rm -rf /opt/n8n; export TG_MODE=proxy_blocked
              run "Ж: прокси закрывает Telegram, напрямую можно"  "$HTTP_PROXY_ANS"
              check "Ж: Telegram выведен из-под прокси (.env)"    grep -q '^NO_PROXY_EXTRA=,api.telegram.org,.telegram.org' /opt/n8n/.env
              check "Ж: об этом сказано человеку"                 grep -q 'не пускает к Telegram' /tmp/r.log
 export TG_MODE=both_blocked
-             run "Ж2: повторный запуск, Telegram не виден нигде" 'y\ny\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
+             run "Ж2: повторный запуск, Telegram не виден нигде" 'y\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
              check "Ж2: прежнее решение сохранилось"             grep -q '^NO_PROXY_EXTRA=,api.telegram.org' /opt/n8n/.env
              check "Ж2: человека предупредили"                   grep -q 'ни через прокси, ни напрямую' /tmp/r.log
 rm -rf /opt/n8n
@@ -42,11 +48,11 @@ rm -rf /opt/n8n
 export TG_MODE=ok
 rm -rf /opt/n8n; run "Ж4: прокси пускает Telegram"               "$HTTP_PROXY_ANS"
              check "Ж4: исключения нет"                          grep -q '^NO_PROXY_EXTRA=$' /opt/n8n/.env
-rm -rf /opt/n8n; run "Ж5: без прокси"                            'n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+rm -rf /opt/n8n; run "Ж5: без прокси"                            'n8n.mysite.ru\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
              check "Ж5: исключения нет"                          grep -q '^NO_PROXY_EXTRA=$' /opt/n8n/.env
 
 # --- долгие шаги пишут, что работа идёт ----------------------------------------
-PLAIN_ANS='n8n.mysite.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+PLAIN_ANS='n8n.mysite.ru\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
 rm -rf /opt/n8n; export PULL_SLEEP=20
              run "З: образы качаются долго"                     "$PLAIN_ANS"
              check "З: пишет, что качает"                       grep -q 'качаем, прошло 15 сек' /tmp/r.log
@@ -68,20 +74,20 @@ unset CERT_WAIT
 # --- русская раскладка в адресе и несуществующий домен ------------------------
 E=$(printf '\xd0\xb5')
 rm -rf /opt/n8n
-             run "И: адрес с русской «е», потом правильный"     "n8n.${E}xampl${E}.ru\nn8n.example.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n"
+             run "И: адрес с русской «е», потом правильный"     "n8n.${E}xampl${E}.ru\nn8n.example.ru\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n"
              check "И: объяснил про раскладку"                 grep -q 'русской раскладке' /tmp/r.log
              check "И: в .env правильный адрес"                grep -q '^N8N_FQDN=n8n.example.ru$' /opt/n8n/.env
 sed -i "s/^N8N_FQDN=.*/N8N_FQDN=n8n.${E}xampl${E}.ru/" /opt/n8n/.env
-             run "И2: сохранённый адрес с русской «е»"           'n8n.example.ru\nn\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
+             run "И2: сохранённый адрес с русской «е»"           'n8n.example.ru\nn\nadmin@m.ru\nEurope/Moscow\nn\n'
              check "И2: не предложил оставить его"             sh -c '! grep -q "Оставить этот же адрес" /tmp/r.log'
              check "И2: объяснил про раскладку"                grep -q 'русской раскладке' /tmp/r.log
              check "И2: в .env правильный адрес"               grep -q '^N8N_FQDN=n8n.example.ru$' /opt/n8n/.env
 RF=$(printf 'n8n.\xd0\xbc\xd0\xbe\xd0\xb9\xd1\x81\xd0\xb0\xd0\xb9\xd1\x82.\xd1\x80\xd1\x84')
 rm -rf /opt/n8n
-             run "И3: домен .рф целиком кириллицей"              "${RF}\ny\nn\nn\nn\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n"
+             run "И3: домен .рф целиком кириллицей"              "${RF}\ny\nn\nn\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n"
              check "И3: не принял за ошибку раскладки"         sh -c '! grep -q "русской раскладке" /tmp/r.log'
 rm -rf /opt/n8n
-             run "И4: такого домена нет"                         'n8n.nosuch.ru\nn\nn\nn\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+             run "И4: такого домена нет"                         'n8n.nosuch.ru\nn\nn\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
              check "И4: сказал, что не найден сам домен"       grep -q 'Домен nosuch.ru в интернете не найден' /tmp/r.log
 
 # --- Telegram «через раз», как на Beget: один адрес мёртв ---------------------
@@ -125,11 +131,47 @@ check "М5: мёртвый адрес назван"                   diag flaky
 # --- повторный запуск не перескакивает на новую большую версию n8n ------------
 rm -rf /opt/n8n /tmp/maj; run "Н: первая установка"                 "$PLAIN_ANS"
 export MAJOR_TEST=1
-             run "Н: повторный запуск, вышел n8n 3"                    'y\nn\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
+             run "Н: повторный запуск, вышел n8n 3"                    'y\nn\nadmin@m.ru\nEurope/Moscow\nn\n'
              check "Н: оставил прежнюю версию"                     grep -q 'Оставляем вашу версию n8n 2.46.7' /tmp/r.log
              check "Н: сказал, что вышла новая версия"           grep -q 'Вышла новая большая версия n8n 3.1.0' /tmp/r.log
              check "Н: под latest прежний образ"                   grep -qx old /tmp/maj/latest
 unset MAJOR_TEST
+
+# --- больше нет вопроса про Cloudflare --------------------------------------
+rm -rf /opt/n8n; run "О: новая установка"                         "$PLAIN_ANS"
+             check "О: не спрашивал про Cloudflare и токен"     sh -c '! grep -qiE "подключён к Cloudflare|токен Cloudflare" /tmp/r.log'
+             check "О: инструкция для reg.ru и Cloudflare"     sh -c 'grep -q "reg.ru      -" /tmp/r.log && grep -q "Cloudflare  -" /tmp/r.log'
+             check "О: обычный способ сертификата"             grep -q '^TLS_MODE=http' /opt/n8n/.env
+rm -rf /opt/n8n; run "О2: включено оранжевое облако"              'n8n.orange.ru\nn\nn\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n'
+             check "О2: сказал выключить оранжевое облако"      grep -q 'включено оранжевое облако' /tmp/r.log
+
+# --- занятые порты 80/443 ---------------------------------------------------
+BUSY='LISTEN 0 511 0.0.0.0:80 0.0.0.0:* users:(("nginx",pid=111,fd=6),("nginx",pid=112,fd=6))
+LISTEN 0 511 0.0.0.0:443 0.0.0.0:* users:(("nginx",pid=111,fd=7))'
+rm -rf /opt/n8n /tmp/disabled; printf '%s\n' "$BUSY" > /tmp/busy
+             run "П: порты заняты nginx - освобождает сам"   "$PLAIN_ANS"
+             check "П: не задавал вопросов про порты"         sh -c '! grep -q "Освободить порты" /tmp/r.log'
+             check "П: сказал, кто занимал"                   grep -q 'Порты 80 и 443 были заняты программой: nginx' /tmp/r.log
+             check "П: выключил nginx совсем"                 grep -q 'disable --now nginx.service' /tmp/disabled
+             check "П: сказал, что освободил"                 grep -q 'Порты 80 и 443 освобождены' /tmp/r.log
+             check "П: подсказал, как вернуть"                grep -q 'systemctl enable --now nginx.service' /tmp/r.log
+rm -rf /opt/n8n; printf '%s\n' "$BUSY" > /tmp/busy; export STUBBORN=1
+printf "%-52s" "П3: порты не освобождаются"
+if printf "$PLAIN_ANS" | bash "${INSTALL_SH:-/work/install.sh}" >/tmp/r.log 2>&1; then echo "ПРОВАЛ (не должен был ставить)"; FAILED=1
+elif grep -q 'Не получилось освободить порты' /tmp/r.log; then echo "OK"; else echo "ПРОВАЛ"; tail -5 /tmp/r.log; FAILED=1; fi
+unset STUBBORN; rm -f /tmp/busy
+rm -rf /opt/n8n; run "П4: порты держит наш же Caddy (повтор)"     "$PLAIN_ANS"
+printf '%s\n' 'LISTEN 0 4096 0.0.0.0:80 0.0.0.0:* users:(("docker-proxy",pid=222,fd=4))' > /tmp/busy
+             run "П4: повторный запуск"                         'y\nn\nadmin@m.ru\nEurope/Moscow\nn\n'
+             check "П4: наш Caddy не трогал"                   sh -c '! grep -q "были заняты программой" /tmp/r.log'
+rm -f /tmp/busy
+
+# --- если запуск не удался - видна причина ----------------------------------
+rm -rf /opt/n8n; export UP_FAIL=1
+printf "%-52s" "Р: Docker не смог запустить контейнеры"
+if printf "$PLAIN_ANS" | bash "${INSTALL_SH:-/work/install.sh}" >/tmp/r.log 2>&1; then echo "ПРОВАЛ (не должен был ставить)"; FAILED=1
+elif grep -q 'Что ответил Docker' /tmp/r.log && grep -q 'something bad happened' /tmp/r.log; then echo "OK"; else echo "ПРОВАЛ"; tail -8 /tmp/r.log; FAILED=1; fi
+unset UP_FAIL
 
 if [ "$FAILED" -ne 0 ]; then
   echo

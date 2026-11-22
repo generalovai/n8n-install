@@ -21,7 +21,7 @@
 set -Eeuo pipefail
 
 # ВАЖНО: имя не VERSION - его затирает /etc/os-release, который мы читаем ниже
-INST_VER="2.3.7"
+INST_VER="2.3.8"
 DIR="/opt/n8n"
 ENV_FILE="$DIR/.env"
 LOG="$([ "$(id -u)" -eq 0 ] && echo /var/log/n8n-install.log || echo /tmp/n8n-install.log)"
@@ -129,6 +129,88 @@ env_get() { # читает значение из уже существующег
 }
 
 dc() { docker compose --project-directory "$DIR" "$@"; }
+
+# Порты 80 и 443 нужны сайту n8n и для выдачи сертификата. Если их держит
+# другая программа - обычно nginx или apache от панели, выбранной при заказе
+# сервера, - n8n не запустится. Так случилось на живом сервере FirstVDS:
+# установка падала на «Стартуем...» без понятной причины.
+port_users() {   # заполняет PU_PROGS, PU_UNITS, PU_PIDS (без службы), PU_CONTAINERS
+  PU_PROGS=""; PU_UNITS=""; PU_PIDS=""; PU_CONTAINERS=""
+  command -v ss >/dev/null 2>&1 || return 0
+  local pid name unit c
+  while read -r pid name; do
+    [ -n "$pid" ] || continue
+    if [ "$name" = "docker-proxy" ]; then
+      # порт держит Docker: наш Caddy (контейнеры n8n-...) не трогаем
+      for c in $( { docker ps --format '{{.Names}}' --filter publish=80 2>/dev/null
+                    docker ps --format '{{.Names}}' --filter publish=443 2>/dev/null; } | sort -u); do
+        case "$c" in n8n-*) ;; *) case " $PU_CONTAINERS " in *" $c "*) ;; *) PU_CONTAINERS="$PU_CONTAINERS $c" ;; esac ;; esac
+      done
+      continue
+    fi
+    case " $PU_PROGS " in *" $name "*) ;; *) PU_PROGS="$PU_PROGS $name" ;; esac
+    unit="$(ps -o unit= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+    case "$unit" in
+      *.service) case " $PU_UNITS " in *" $unit "*) ;; *) PU_UNITS="$PU_UNITS $unit" ;; esac ;;
+      *) PU_PIDS="$PU_PIDS $pid" ;;
+    esac
+  # «ничего не нашлось» - обычный случай, а не ошибка: без «|| true» grep вернул
+  # бы ошибку, и её текст попал бы сюда вместо имён программ (было в тестах)
+  done < <( { ss -Hltnp 2>/dev/null | awk '$4 ~ /:(80|443)$/' \
+             | grep -oE '"[^"]+",pid=[0-9]+' | sed -E 's/"([^"]+)",pid=([0-9]+)/\2 \1/' | sort -u; } || true)
+  PU_PROGS="${PU_PROGS# }"; PU_UNITS="${PU_UNITS# }"; PU_PIDS="${PU_PIDS# }"; PU_CONTAINERS="${PU_CONTAINERS# }"
+}
+
+free_ports() {
+  port_users
+  [ -n "$PU_PROGS$PU_CONTAINERS" ] || { ok "Порты 80 и 443 свободны"; return 0; }
+  local what="$PU_PROGS" c
+  [ -n "$PU_CONTAINERS" ] && what="${what:+$what, }контейнер Docker $PU_CONTAINERS"
+  # Освобождаем сами, без вопроса: установщик рассчитан на новый пустой сервер,
+  # а там это почти всегда nginx или apache от панели/«рецепта» хостинга.
+  # Человеку пишем, что выключили и как вернуть, если это было нужно.
+  say ""
+  warn "Порты 80 и 443 были заняты программой: $what"
+  say  "  Через них работает сайт n8n и выдаётся сертификат, поэтому освобождаем их."
+  local freed="$PU_UNITS"
+  # выключаем совсем, чтобы программа не вернулась после перезагрузки
+  # shellcheck disable=SC2086
+  [ -z "$PU_UNITS" ] || systemctl disable --now $PU_UNITS >/dev/null 2>&1 || true
+  # shellcheck disable=SC2086
+  [ -z "$PU_PIDS" ] || kill $PU_PIDS >/dev/null 2>&1 || true
+  for c in $PU_CONTAINERS; do
+    docker update --restart=no "$c" >/dev/null 2>&1 || true
+    docker stop "$c" >/dev/null 2>&1 || true
+  done
+  sleep 3
+  port_users
+  if [ -n "$PU_PROGS$PU_CONTAINERS" ]; then
+    die "Не получилось освободить порты 80 и 443 (их держит: $PU_PROGS $PU_CONTAINERS).
+Скорее всего, это панель управления хостинга - она запускает их заново.
+Проще всего переустановить систему в панели хостинга: чистая Ubuntu 24.04,
+без панели управления и без готового софта. Потом запустите эту команду снова."
+  fi
+  ok "Порты 80 и 443 освобождены"
+  # shellcheck disable=SC2086
+  [ -z "$freed" ] || say "  Если $what был вам нужен, вернуть: ${B}systemctl enable --now $freed${R}
+  (но тогда n8n не сможет работать на этом сервере)."
+}
+
+# Адрес из сетей Cloudflare? Тогда у записи включено оранжевое облако.
+# Список сетей публичный (cloudflare.com/ips-v4) и меняется редко; держим копию,
+# чтобы не зависеть от сети.
+CF_NETS="173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22"
+ip2int() { local a b c d; IFS=. read -r a b c d <<< "$1"; echo $(( (a<<24) + (b<<16) + (c<<8) + d )); }
+is_cloudflare_ip() {
+  local net ip mask bits
+  printf '%s' "$1" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || return 1
+  ip="$(ip2int "$1")"
+  for net in $CF_NETS; do
+    bits="${net#*/}"; mask=$(( (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF ))
+    [ $(( ip & mask )) -eq $(( $(ip2int "${net%/*}") & mask )) ] && return 0
+  done
+  return 1
+}
 
 # Русская раскладка в адресе. Русские «е», «о», «а», «с», «р» выглядят как
 # английские, но адрес с ними - совсем другой, и его не существует. Скрипт
@@ -450,6 +532,9 @@ DISK_GB=$(df -P -k / | awk 'NR==2 {print int($4/1024/1024)}')
 info "Свободно на диске: ${DISK_GB} ГБ"
 [ "${DISK_GB:-0}" -ge 5 ] || die "На диске меньше 5 ГБ свободного места - для Docker и n8n этого не хватит."
 
+info "Проверяю, свободны ли порты 80 и 443..."
+free_ports
+
 export DEBIAN_FRONTEND=noninteractive
 info "Ставим базовые утилиты (это может занять минуту)..."
 apt-get update -qq
@@ -648,137 +733,35 @@ TLS_MODE="$(env_get TLS_MODE || true)"
 CF_API_TOKEN="$(env_unesc "$(env_get CF_API_TOKEN || true)")"
 CF_PROXIED="$(env_get CF_PROXIED || echo false)"
 
-if [ -n "$TLS_MODE" ] && ask_yes "Оставить прежние настройки HTTPS (режим: $TLS_MODE)?" "y"; then
-  :
+# Сертификат берём обычным способом: Caddy сам получает его у Let's Encrypt.
+# От человека нужна только A-запись - её он вписывает руками там, где у домена
+# DNS (reg.ru, Cloudflare, любой регистратор). Скрипт лишь проверяет, что домен
+# смотрит на этот сервер.
+#
+# До версии 2.3.8 был ещё вариант с API-токеном Cloudflare. Новым установкам
+# его не предлагаем, но тех, кто уже так поставил, не трогаем: у них может быть
+# включено оранжевое облако, и обычный способ у них не сработает.
+if [ "$TLS_MODE" = "cloudflare" ] && [ -n "$CF_API_TOKEN" ]; then
+  ok "HTTPS через Cloudflare - как в прошлой установке, ничего не меняем"
 else
-  TLS_MODE=""; CF_API_TOKEN=""; CF_PROXIED=false
-  cat <<'TXT'
-
-  Есть два пути.
-
-  1. DNS вашего домена управляется через Cloudflare (бесплатно, даже
-     если сам домен куплен на reg.ru - там просто меняются NS-серверы).
-     Тогда скрипт сам создаст нужную запись и получит сертификат.
-     Это надёжнее: работает, даже если провайдер закрыл 80 порт.
-
-  2. Обычный вариант: DNS у регистратора (reg.ru и любые другие).
-     Вы один раз создадите A-запись руками, дальше всё сделает скрипт.
-
-TXT
-  if ask_yes "Ваш домен подключён к Cloudflare?" "n"; then
-    TLS_MODE=cloudflare
-  else
-    TLS_MODE=http
-  fi
-fi
-
-if [ "$TLS_MODE" = "cloudflare" ]; then
-  if [ -z "$CF_API_TOKEN" ]; then
-    cat <<'TXT'
-
-  Нужен API-токен Cloudflare. Как его создать:
-    1. Зайдите на https://dash.cloudflare.com/profile/api-tokens
-    2. Create Token -> Edit zone DNS (Use template)
-    3. В Zone Resources выберите свой домен
-    4. Continue -> Create Token -> скопируйте токен
-
-  Токен даёт права только на записи DNS этого домена.
-  При вводе он не будет виден на экране - это нормально, просто вставьте и нажмите Enter.
-
-TXT
-    while :; do
-      ask_secret CF_API_TOKEN "Вставьте токен Cloudflare"
-      [ -n "$CF_API_TOKEN" ] || { warn "Пусто. Попробуйте вставить ещё раз."; continue; }
-      info "Проверяем токен..."
-      if pcurl -sS --max-time 30 -H "Authorization: Bearer $CF_API_TOKEN" \
-           https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null | jq -e '.success == true' >/dev/null; then
-        ok "Токен принят Cloudflare"
-        break
-      fi
-      warn "Cloudflare не принял этот токен. Проверьте, что скопировали его целиком."
-      ask_yes "Попробовать ещё раз?" "y" || die "Без рабочего токена вариант с Cloudflare не заработает.
-Запустите скрипт заново и выберите обычный вариант с A-записью."
-    done
-  fi
-
-  # Ищем зону: спрашиваем Cloudflare про каждый вариант домена по очереди
-  # (n8n.moysite.ru -> moysite.ru -> ...). Так надёжнее, чем тянуть список всех
-  # зон: у списка есть ограничение на размер страницы.
-  info "Ищем ваш домен в аккаунте Cloudflare..."
-  CF_ZONE_ID=""; CF_ZONE_NAME=""; CF_TRIED=""
-  CAND="$FQDN"
-  while [ "${CAND#*.}" != "$CAND" ]; do
-    CF_TRIED="$CF_TRIED
-  - $CAND"
-    CF_Z="$(pcurl -sS --max-time 30 -H "Authorization: Bearer $CF_API_TOKEN" \
-        "https://api.cloudflare.com/client/v4/zones?name=$CAND" 2>/dev/null || echo '{}')"
-    CF_ZONE_ID="$(printf '%s' "$CF_Z" | jq -r '.result[0].id // empty')"
-    if [ -n "$CF_ZONE_ID" ]; then CF_ZONE_NAME="$CAND"; break; fi
-    CAND="${CAND#*.}"
-  done
-
-  [ -n "$CF_ZONE_ID" ] || die "В аккаунте Cloudflare не нашёлся домен для адреса $FQDN.
-Проверяли такие варианты:$CF_TRIED
-
-Что проверить:
-  - домен действительно добавлен в Cloudflare (в списке Websites);
-  - токен выдан на ЭТОТ домен (в шаблоне Edit zone DNS есть выбор Zone Resources);
-  - у токена есть право Zone:Read - без него он домен не видит."
-  ok "Домен найден в Cloudflare: $CF_ZONE_NAME"
-
-  if [ "$CF_PROXIED" != "true" ]; then
-    cat <<'TXT'
-
-  Оранжевое облако Cloudflare прячет IP сервера и защищает от атак,
-  но у бесплатного тарифа есть ограничение: файлы больше 100 МБ
-  через него не пройдут. Для n8n это обычно неудобно.
-
-TXT
-    if ask_yes "Включить оранжевое облако (скрыть IP сервера)?" "n"; then
-      CF_PROXIED=true
-    else
-      CF_PROXIED=false
-    fi
-  fi
-
-  # создаём или обновляем A-запись
-  info "Настраиваем A-запись $FQDN -> $SERVER_IP ..."
-  CF_REC_ID="$(pcurl -sS --max-time 30 -H "Authorization: Bearer $CF_API_TOKEN" \
-      "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=$FQDN" 2>/dev/null \
-      | jq -r '.result[0].id // empty')"
-  # у проксируемых записей Cloudflare ожидает ttl=1 ("автоматически")
-  CF_TTL=120; [ "$CF_PROXIED" = "true" ] && CF_TTL=1
-  CF_BODY="$(jq -nc --arg n "$FQDN" --arg c "$SERVER_IP" --argjson p "$CF_PROXIED" --argjson t "$CF_TTL" \
-      '{type:"A",name:$n,content:$c,ttl:$t,proxied:$p}')"
-  if [ -n "$CF_REC_ID" ]; then
-    CF_RES="$(pcurl -sS --max-time 30 -X PUT -H "Authorization: Bearer $CF_API_TOKEN" \
-        -H "Content-Type: application/json" --data "$CF_BODY" \
-        "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$CF_REC_ID" 2>/dev/null || echo '{}')"
-  else
-    CF_RES="$(pcurl -sS --max-time 30 -X POST -H "Authorization: Bearer $CF_API_TOKEN" \
-        -H "Content-Type: application/json" --data "$CF_BODY" \
-        "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" 2>/dev/null || echo '{}')"
-  fi
-  printf '%s' "$CF_RES" | jq -e '.success == true' >/dev/null || die "Cloudflare не дал изменить A-запись.
-Ответ Cloudflare: $(printf '%s' "$CF_RES" | jq -r '.errors[]?.message' | head -3)
-Чаще всего у токена не хватает прав: нужен шаблон Edit zone DNS именно на этот домен."
-  ok "A-запись настроена (оранжевое облако: $([ "$CF_PROXIED" = true ] && echo включено || echo выключено))"
-
-else
-  # обычный вариант: A-запись руками.
+  TLS_MODE=http; CF_API_TOKEN=""; CF_PROXIED=false
   # Если адрес без поддомена (moysite.ru) - в панели это записывается как @
   REC_NAME="${FQDN%%.*}"
   [ "$(printf '%s' "$FQDN" | tr -cd . | wc -c)" -le 1 ] && REC_NAME="@"
   cat <<TXT
 
-  Зайдите в панель управления доменом (например, на reg.ru это
-  раздел "Управление зоной DNS") и создайте запись:
+  Создайте одну запись там, где управляете доменом:
+    reg.ru      - «Домены» -> ваш домен -> «DNS-серверы и управление зоной»
+    Cloudflare  - ваш домен -> DNS -> Records -> Add record
 
       Тип:      A
       Имя:      $REC_NAME
       Значение: $SERVER_IP
 
-  Записи обычно расходятся за 5-30 минут.
+  В Cloudflare у записи выключите оранжевое облако (Proxy status:
+  DNS only, облако серое) - иначе n8n будет работать с ограничениями.
+
+  Записи обычно расходятся за 5-30 минут. Скрипт подождёт и проверит.
 
 TXT
   while :; do
@@ -788,35 +771,40 @@ TXT
       ok "Домен указывает на этот сервер"
       break
     fi
-    warn "Пока указывает на: ${DNS_IP:-(запись не найдена)}, а нужен $SERVER_IP"
 
-    # Частая путаница: человек правит запись у регистратора, а домен давно
-    # переведён на чужие DNS - и правки никто не видит. Показываем, где он живёт.
+    # Где живёт DNS домена: частая путаница - запись правят у регистратора,
+    # а домен давно переведён в Cloudflare (или наоборот).
     NS_ZONE="$FQDN"; NS_LIST=""
     while [ "${NS_ZONE#*.}" != "$NS_ZONE" ]; do
       NS_LIST="$(dns_q NS "$NS_ZONE" | tr '\n' ' ')"
       [ -n "$NS_LIST" ] && break
       NS_ZONE="${NS_ZONE#*.}"
     done
-    if [ -n "$NS_LIST" ]; then
-      say "  DNS домена $NS_ZONE обслуживают: $B$NS_LIST$R"
-      case "$NS_LIST" in
-        *cloudflare*)
-          say "  ${YEL}Это серверы Cloudflare - значит запись надо создавать в Cloudflare,${R}"
-          say "  ${YEL}а не в панели регистратора: там правки ни на что не влияют.${R}"
-          say "  Проще всего: прервите установку (Ctrl+C), запустите её снова"
-          say "  и на вопросе про Cloudflare ответьте да - скрипт создаст запись сам." ;;
-        *)
-          say "  Если это не те серверы, где вы правите запись - правки не сработают." ;;
-      esac
-    else
+
+    if [ -n "$DNS_IP" ] && is_cloudflare_ip "$DNS_IP"; then
+      warn "Запись есть, но включено оранжевое облако Cloudflare."
+      say  "  В Cloudflare: DNS -> Records -> у записи $B$REC_NAME$R нажмите на оранжевое облако,"
+      say  "  чтобы оно стало серым (DNS only), и сохраните."
+    elif [ -z "$NS_LIST" ]; then
       # не нашёлся даже сам домен - запись тут ни при чём
       REG_DOMAIN="$(printf '%s' "$FQDN" | awk -F. '{print $(NF-1)"."$NF}')"
-      say "  ${YEL}Домен $REG_DOMAIN в интернете не найден - дело не в записи.${R}"
-      say "  Проверьте адрес на опечатки. Если домен купили только что -"
-      say "  он появляется в интернете за несколько часов после оплаты."
-      say "  Чтобы ввести адрес заново: Ctrl+C, запустите установку снова"
-      say "  и на вопрос «Оставить этот же адрес?» ответьте n."
+      warn "Домен $REG_DOMAIN в интернете не найден - дело не в записи."
+      say  "  Проверьте адрес на опечатки. Если домен купили только что -"
+      say  "  он появляется в интернете за несколько часов после оплаты."
+      say  "  Чтобы ввести адрес заново: Ctrl+C, запустите установку снова"
+      say  "  и на вопрос «Оставить этот же адрес?» ответьте n."
+    else
+      warn "Пока указывает на: ${DNS_IP:-(запись не найдена)}, а нужен $SERVER_IP"
+      case "$NS_LIST" in
+        *cloudflare*)
+          say "  DNS домена $NS_ZONE ведёт ${B}Cloudflare${R} - запись создавайте там,"
+          say "  а не у регистратора: правки у регистратора ни на что не влияют." ;;
+        *reg.ru*|*regru*)
+          say "  DNS домена $NS_ZONE ведёт ${B}reg.ru${R} - запись создавайте там." ;;
+        *)
+          say "  DNS домена $NS_ZONE обслуживают: $B$NS_LIST$R"
+          say "  Запись надо создавать там, где эти серверы." ;;
+      esac
     fi
     if ask_yes "Запись уже создана - проверить ещё раз?" "y"; then continue; fi
     ask_yes "Продолжить без проверки? (сертификат выдастся позже сам, когда DNS обновится)" "n" && break
@@ -2384,8 +2372,24 @@ fi
 
 info "Стартуем..."
 # --remove-orphans убирает контейнеры, которые больше не нужны:
-# например, мост socks5, если человек сменил прокси на обычный
-dc up -d --remove-orphans
+# например, мост socks5, если человек сменил прокси на обычный.
+# Ответ Docker сохраняем: если запуск не удался, человек должен увидеть причину,
+# а не «команда на строке N завершилась с ошибкой».
+UP_LOG="$(mktemp)"
+if ! dc up -d --remove-orphans >"$UP_LOG" 2>&1; then
+  if grep -qiE 'address already in use|port is already allocated|bind.*:(80|443)' "$UP_LOG"; then
+    free_ports   # порт заняли уже после проверки в начале - освобождаем и пробуем снова
+    dc up -d --remove-orphans >"$UP_LOG" 2>&1 || START_FAIL=1
+  else
+    START_FAIL=1
+  fi
+  if [ "${START_FAIL:-0}" = 1 ]; then
+    say ""; say "Что ответил Docker:"; tail -15 "$UP_LOG" | sed 's/^/    /'
+    die "Не удалось запустить n8n. Причина - в ответе Docker выше.
+Если не понятно, что с ней делать, пришлите этот текст автору урока."
+  fi
+fi
+rm -f "$UP_LOG"
 
 # ВАЖНО: прокси для этой проверки гасим. wget внутри контейнера уважает
 # http_proxy и пойдёт спрашивать про localhost у зарубежного прокси,
