@@ -5,230 +5,294 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Установка n8n на свой сервер — пошаговый гид</title>
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+
 <style>
+  /* Оформление в духе n8n.io: светлый фон в точку, крупные заголовки,
+     моноширинные подписи заглавными, розовые кнопки-пилюли и карточки-узлы. */
   :root {
-    --ground:#FBFBFD; --paper:#FFFFFF; --sunken:#F1F3F8; --line:#E1E6EF;
-    --ink:#13161D; --ink-2:#4B5468; --ink-3:#798397;
-    --accent:#CE2B55; --accent-soft:#FCECF1; --accent-line:#F2C4D2;
-    --ok:#0B7355; --ok-soft:#E7F5F0;
-    --warn:#7A5200; --warn-soft:#FFF6E3; --warn-line:#EFDCB0;
-    --term-bg:#12151C; --term-ink:#DDE4F0; --term-dim:#79849A; --term-line:#262C38;
-    --shadow: 0 1px 2px rgba(19,22,29,.05), 0 8px 24px -16px rgba(19,22,29,.25);
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --ground:#F4F4F4; --dots:rgba(17,17,17,.13);
+    --paper:#FFFFFF; --card:#EBEBEB; --sunken:#F1F1F1; --line:#E1E1E1; --wire:#CFCFCF; --port:#5E5E5E;
+    --ink:#111111; --ink-2:#474747; --ink-3:#767676;
+    --pill:#FFB3C6; --pill-hover:#FF9DB6; --pill-ink:#111111; --pill-2:#E4E4E4; --pill-2-hover:#D8D8D8;
+    --accent:#C42450; --accent-soft:#FFEBF0; --accent-line:#FFC6D4;
+    --ok:#0B6B4D; --ok-soft:#E5F3EC; --ok-line:#C5E6D6;
+    --warn:#6E4A00; --warn-soft:#FFF5E0; --warn-line:#F0DDB0;
+    --term-bg:#18181B; --term-ink:#E6E6EA; --term-dim:#8A8A94; --term-line:#2A2A30;
+    --mono:"Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans:"Geist", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --ground:#0C0F14; --paper:#141822; --sunken:#1A1F2A; --line:#272E3C;
-      --ink:#E8ECF3; --ink-2:#A5AFC1; --ink-3:#788494;
-      --accent:#FF6F92; --accent-soft:#2B1820; --accent-line:#4A2632;
-      --ok:#43C79D; --ok-soft:#12241E;
-      --warn:#E5B96B; --warn-soft:#251E10; --warn-line:#3D3320;
-      --term-bg:#080A0F; --term-ink:#DDE4F0; --term-dim:#727E94; --term-line:#1E242F;
-      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    :root:not([data-theme="light"]) {
+      --ground:#0F0F11; --dots:rgba(255,255,255,.09);
+      --paper:#17171A; --card:#222226; --sunken:#1C1C20; --line:#2C2C31; --wire:#3A3A40; --port:#9A9AA2;
+      --ink:#F2F2F3; --ink-2:#B9B9C0; --ink-3:#8B8B93;
+      --pill:#FF9DB6; --pill-hover:#FFB3C6; --pill-ink:#111111; --pill-2:#2A2A2F; --pill-2-hover:#34343A;
+      --accent:#FF7D9C; --accent-soft:#2A161C; --accent-line:#4D2530;
+      --ok:#4CCB9F; --ok-soft:#12231D; --ok-line:#1E3A2F;
+      --warn:#E8BE6E; --warn-soft:#241D10; --warn-line:#3B3120;
+      --term-bg:#0A0A0C; --term-ink:#E6E6EA; --term-dim:#7C7C86; --term-line:#222228;
     }
   }
   :root[data-theme="dark"] {
-    --ground:#0C0F14; --paper:#141822; --sunken:#1A1F2A; --line:#272E3C;
-    --ink:#E8ECF3; --ink-2:#A5AFC1; --ink-3:#788494;
-    --accent:#FF6F92; --accent-soft:#2B1820; --accent-line:#4A2632;
-    --ok:#43C79D; --ok-soft:#12241E;
-    --warn:#E5B96B; --warn-soft:#251E10; --warn-line:#3D3320;
-    --term-bg:#080A0F; --term-ink:#DDE4F0; --term-dim:#727E94; --term-line:#1E242F;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
-  }
-  :root[data-theme="light"] {
-    --ground:#FBFBFD; --paper:#FFFFFF; --sunken:#F1F3F8; --line:#E1E6EF;
-    --ink:#13161D; --ink-2:#4B5468; --ink-3:#798397;
-    --accent:#CE2B55; --accent-soft:#FCECF1; --accent-line:#F2C4D2;
-    --ok:#0B7355; --ok-soft:#E7F5F0;
-    --warn:#7A5200; --warn-soft:#FFF6E3; --warn-line:#EFDCB0;
-    --term-bg:#12151C; --term-ink:#DDE4F0; --term-dim:#79849A; --term-line:#262C38;
-    --shadow: 0 1px 2px rgba(19,22,29,.05), 0 8px 24px -16px rgba(19,22,29,.25);
+    --ground:#0F0F11; --dots:rgba(255,255,255,.09);
+    --paper:#17171A; --card:#222226; --sunken:#1C1C20; --line:#2C2C31; --wire:#3A3A40; --port:#9A9AA2;
+    --ink:#F2F2F3; --ink-2:#B9B9C0; --ink-3:#8B8B93;
+    --pill:#FF9DB6; --pill-hover:#FFB3C6; --pill-ink:#111111; --pill-2:#2A2A2F; --pill-2-hover:#34343A;
+    --accent:#FF7D9C; --accent-soft:#2A161C; --accent-line:#4D2530;
+    --ok:#4CCB9F; --ok-soft:#12231D; --ok-line:#1E3A2F;
+    --warn:#E8BE6E; --warn-soft:#241D10; --warn-line:#3B3120;
+    --term-bg:#0A0A0C; --term-ink:#E6E6EA; --term-dim:#7C7C86; --term-line:#222228;
   }
 
-  * { box-sizing: border-box; }
-  img, svg { max-width: 100%; height: auto; }
+  * { box-sizing:border-box; }
+  img, svg { max-width:100%; height:auto; }
+  html { scroll-behavior:smooth; }
   body {
-    margin:0; background:var(--ground); color:var(--ink);
+    margin:0; color:var(--ink);
+    background-color:var(--ground);
+    background-image:radial-gradient(var(--dots) 1.1px, transparent 1.3px);
+    background-size:22px 22px;
     font-family:var(--sans); font-size:16px; line-height:1.62;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap { max-width:820px; margin:0 auto; padding:0 20px 96px; }
+  .wrap { max-width:860px; margin:0 auto; padding:0 20px 96px; }
+  .label {
+    font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+  }
 
-  /* ---------- шапка ---------- */
-  header.top { padding:56px 0 28px; }
-  .eyebrow {
-    font-family:var(--mono); font-size:11.5px; letter-spacing:.16em;
-    text-transform:uppercase; color:var(--accent); margin:0 0 14px;
+  /* ---------- верхняя панель ---------- */
+  .nav {
+    max-width:1100px; margin:18px auto 0; padding:10px 10px 10px 22px;
+    display:flex; align-items:center; gap:18px;
+    background:var(--card); border-radius:999px;
   }
+  .brand {
+    display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--ink);
+    font-weight:600; font-size:17px; letter-spacing:-.01em; white-space:nowrap;
+  }
+  .brand svg { width:34px; height:14px; flex:none; }
+  .nav-links { display:flex; gap:26px; margin:0 auto; }
+  .nav-links a {
+    font-family:var(--mono); font-size:13px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink); text-decoration:none;
+  }
+  .nav-links a:hover { color:var(--accent); }
+  @media (max-width:760px){
+    .nav { margin:12px 12px 0; }
+    .nav-links { display:none; }
+    .nav .btn { margin-left:auto; }
+  }
+
+  /* ---------- кнопки-пилюли ---------- */
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:14px; letter-spacing:.08em; text-transform:uppercase;
+    text-decoration:none; color:var(--pill-ink); background:var(--pill);
+    border:0; border-radius:999px; padding:13px 22px; cursor:pointer; white-space:nowrap;
+    transition:background .15s, transform .15s;
+  }
+  .btn:hover { background:var(--pill-hover); }
+  .btn:active { transform:translateY(1px); }
+  .btn.alt { background:var(--pill-2); color:var(--ink); }
+  .btn.alt:hover { background:var(--pill-2-hover); }
+  .btn.sm { padding:10px 18px; font-size:13px; }
+  .btn:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+
+  /* ---------- первый экран ---------- */
+  header.top { text-align:center; padding:72px 0 8px; }
+  .eyebrow { color:var(--accent); margin:0 0 18px; }
   h1 {
-    font-family:var(--mono); font-weight:600; font-size:clamp(27px,4.4vw,40px);
-    line-height:1.16; letter-spacing:-.02em; margin:0 0 14px; text-wrap:balance;
+    font-family:var(--sans); font-weight:600; font-size:clamp(38px,7vw,68px);
+    line-height:1.02; letter-spacing:-.035em; margin:0 auto 20px; max-width:14ch; text-wrap:balance;
   }
-  .lede { font-size:17.5px; color:var(--ink-2); margin:0; max-width:60ch; }
+  .lede { font-size:18.5px; color:var(--ink-2); margin:0 auto; max-width:46ch; text-wrap:pretty; }
+  .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:28px 0 0; }
+
+  /* схема-воркфлоу: четыре этапа установки, как узлы в редакторе n8n */
+  .flow-wrap { overflow-x:auto; margin:44px -20px 0; padding:4px 20px 8px; }
+  .flow { display:flex; align-items:flex-start; justify-content:center; min-width:620px; }
+  .node { display:flex; flex-direction:column; align-items:center; gap:10px; width:120px; flex:none; }
+  .node-box {
+    position:relative; width:72px; height:72px; border-radius:16px; background:var(--card);
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
+  }
+  .node-box svg { width:30px; height:30px; }
+  .node-box.done { background:var(--pill); color:var(--pill-ink); }
+  .node-box::before, .node-box::after {
+    content:""; position:absolute; top:50%; width:9px; height:9px; margin-top:-4.5px;
+    border-radius:50%; background:var(--port);
+  }
+  .node-box::before { left:-5px; }
+  .node-box::after { right:-5px; }
+  .node:first-child .node-box::before, .node:last-child .node-box::after { display:none; }
+  .node-name { font-size:15px; font-weight:500; text-align:center; line-height:1.25; }
+  .wire { flex:1 1 40px; min-width:34px; height:2px; background:var(--wire); margin:35px -30px 0; position:relative; z-index:0; }
+  .node-box { z-index:1; }
+  @media (max-width:620px){   /* на телефоне схема целиком помещается в ширину */
+    .flow { min-width:0; }
+    .node { width:66px; gap:8px; }
+    .node-box { width:52px; height:52px; border-radius:13px; }
+    .node-box svg { width:24px; height:24px; }
+    .node-name { font-size:12.5px; }
+    .wire { min-width:10px; margin:25px -12px 0; }
+  }
+
+  /* ---------- блок «спросите ИИ» ---------- */
+  .ai {
+    display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+    margin:48px 0 0; padding:18px 20px; border-radius:20px;
+    background:var(--paper); border:1px solid var(--line);
+  }
+  .ai-text { flex:1 1 380px; font-size:15px; color:var(--ink-2); }
+  .ai-text b { color:var(--ink); }
+  .ai-text .label { display:block; color:var(--accent); margin-bottom:4px; }
 
   /* ---------- панель подстановки ---------- */
   .panel {
-    margin:28px 0 8px;
-    background:var(--paper); border:1px solid var(--line); border-radius:12px;
-    box-shadow:var(--shadow);
+    margin:20px 0 8px; background:var(--paper); border:1px solid var(--line); border-radius:20px;
   }
-  .panel-head {
-    display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
-    padding:14px 18px 0;
-  }
+  .panel-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding:18px 22px 0; }
   .panel-head h2 {
-    font-family:var(--mono); font-size:12px; letter-spacing:.13em; text-transform:uppercase;
-    margin:0; color:var(--ink-2); font-weight:600;
+    font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    margin:0; color:var(--ink); font-weight:600;
   }
-  .panel-head span { font-size:13px; color:var(--ink-3); }
-  .fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:12px 18px 16px; }
+  .panel-head span { font-size:13.5px; color:var(--ink-3); }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:14px 22px 18px; }
   @media (max-width:620px){ .fields { grid-template-columns:1fr; } }
-  .field { display:flex; flex-direction:column; gap:6px; min-width:0; }
-  .field label {
-    font-size:12.5px; color:var(--ink-2); font-weight:600;
-  }
+  .field { display:flex; flex-direction:column; gap:7px; min-width:0; }
+  .field label { font-size:13px; color:var(--ink-2); font-weight:500; }
   .field input {
-    font-family:var(--mono); font-size:14.5px; color:var(--ink);
-    background:var(--sunken); border:1px solid var(--line); border-radius:8px;
-    padding:9px 11px; width:100%; transition:border-color .12s, box-shadow .12s;
+    font-family:var(--mono); font-size:15px; color:var(--ink);
+    background:var(--sunken); border:1px solid var(--line); border-radius:12px;
+    padding:11px 14px; width:100%; transition:border-color .12s, box-shadow .12s;
   }
-  .field input:focus-visible {
-    outline:none; border-color:var(--accent);
-    box-shadow:0 0 0 3px var(--accent-soft);
-  }
+  .field input:focus-visible { outline:none; border-color:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); }
   .field .hint { font-size:12px; color:var(--ink-3); font-family:var(--mono); }
   .field .hint.bad { color:var(--accent); }
 
-  .choices { border-top:1px solid var(--line); padding:14px 18px 6px; display:grid; gap:14px; }
-  @media (min-width:700px){ .choices { grid-template-columns:1fr 1fr; gap:18px; } }
-  .choice { display:flex; flex-direction:column; gap:7px; }
-  .choice-q { font-size:12.5px; color:var(--ink-2); font-weight:600; }
+  .choices { border-top:1px solid var(--line); padding:16px 22px 8px; display:grid; gap:16px; }
+  @media (min-width:700px){ .choices { grid-template-columns:1fr 1fr; gap:18px 22px; } }
+  .choice { display:flex; flex-direction:column; gap:8px; }
+  .choice-q { font-size:13px; color:var(--ink-2); font-weight:500; }
   .seg { display:flex; gap:8px; flex-wrap:wrap; }
   .seg label { cursor:pointer; }
   .seg input { position:absolute; opacity:0; width:0; height:0; }
   .seg span {
-    display:inline-block; padding:7px 13px; border-radius:8px;
-    border:1px solid var(--line); background:var(--sunken);
-    font-size:14px; color:var(--ink-2); transition:border-color .12s, color .12s, background .12s;
+    display:inline-block; padding:8px 16px; border-radius:999px; background:var(--card);
+    font-family:var(--mono); font-size:13px; letter-spacing:.04em; color:var(--ink-2);
+    transition:background .12s, color .12s;
   }
-  .seg input:checked + span {
-    border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600;
-  }
+  .seg label:hover span { background:var(--pill-2-hover); }
+  .seg input:checked + span { background:var(--pill); color:var(--pill-ink); font-weight:600; }
   .seg input:focus-visible + span { outline:2px solid var(--accent); outline-offset:2px; }
-  .mode {
-    margin:0; padding:4px 18px 15px; font-size:13px; color:var(--ink-3);
-    font-family:var(--mono);
-  }
-  .mode b { color:var(--accent); font-weight:600; }
+  .mode { margin:0; padding:6px 22px 18px; font-size:12.5px; color:var(--ink-3); font-family:var(--mono); }
+  .mode b { color:var(--ink); font-weight:600; }
 
-  /* ---------- шаги ---------- */
-  .steps { margin-top:40px; }
-  .step {
-    position:relative; padding:0 0 34px 62px; border-left:1px solid var(--line); margin-left:17px;
+  /* ---------- шаги: узлы на одной линии ---------- */
+  .steps { margin-top:56px; }
+  .step { position:relative; padding:0 0 44px 84px; }
+  .step::before {   /* провод между узлами */
+    content:""; position:absolute; left:23px; top:48px; bottom:0; width:2px; background:var(--wire);
   }
-  .step:last-child { border-left-color:transparent; }
+  .step:last-child::before { display:none; }
   .step > .num {
-    position:absolute; left:-17px; top:0; width:34px; height:34px; border-radius:50%;
-    background:var(--paper); border:1px solid var(--accent-line); color:var(--accent);
-    font-family:var(--mono); font-size:13px; font-weight:600;
+    position:absolute; left:0; top:0; width:48px; height:48px; border-radius:14px;
+    background:var(--card); color:var(--ink);
+    font-family:var(--mono); font-size:16px; font-weight:600;
     display:flex; align-items:center; justify-content:center;
   }
+  .step > .num::after {   /* «порт» узла снизу */
+    content:""; position:absolute; bottom:-5px; left:50%; width:9px; height:9px; margin-left:-4.5px;
+    border-radius:50%; background:var(--port);
+  }
+  .step:last-child > .num::after { display:none; }
   .step h3 {
-    font-family:var(--mono); font-size:19px; font-weight:600; letter-spacing:-.01em;
-    margin:3px 0 10px; line-height:1.3; text-wrap:balance;
+    font-family:var(--sans); font-size:clamp(22px,3.2vw,28px); font-weight:600; letter-spacing:-.025em;
+    margin:6px 0 12px; line-height:1.15; text-wrap:balance;
   }
   .step p { margin:0 0 12px; color:var(--ink-2); }
   .step p strong, li strong { color:var(--ink); font-weight:600; }
   .step ul, .step ol { margin:0 0 12px; padding-left:20px; color:var(--ink-2); }
   .step li { margin-bottom:6px; }
   .step li::marker { color:var(--ink-3); }
-  @media (max-width:620px){ .step { padding-left:40px; } }
+  @media (max-width:620px){
+    .step { padding-left:58px; }
+    .step > .num { width:40px; height:40px; border-radius:12px; font-size:14px; }
+    .step::before { left:19px; top:40px; }
+  }
 
   /* ---------- код ---------- */
   .cmd { position:relative; margin:14px 0 16px; }
   .cmd pre {
     margin:0; background:var(--term-bg); color:var(--term-ink);
-    border:1px solid var(--term-line); border-radius:10px;
-    padding:14px 16px; overflow-x:auto;
-    font-family:var(--mono); font-size:13.5px; line-height:1.6;
+    border:1px solid var(--term-line); border-radius:14px;
+    padding:16px 18px; overflow-x:auto;
+    font-family:var(--mono); font-size:13.5px; line-height:1.65;
   }
   .cmd pre .dim { color:var(--term-dim); }
-  .cmd pre .hl { color:#FF9BB4; }
+  .cmd pre .hl { color:#FF9DB6; }
   /* Кнопка стоит под блоком, а не поверх него: длинные команды уходили
      под неё и часть текста было не видно. */
   .copy {
-    display:block; margin:7px 0 0 auto;
-    font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
-    color:var(--ink-3); background:transparent;
-    border:1px solid var(--line); border-radius:6px; padding:5px 9px;
-    cursor:pointer; transition:color .12s, border-color .12s;
+    display:block; margin:8px 0 0 auto;
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:var(--pill-2); border:0; border-radius:999px; padding:7px 14px;
+    cursor:pointer; transition:background .12s;
   }
-  .copy:hover, .copy:focus-visible { color:var(--ink); border-color:var(--ink-3); outline:none; }
+  .copy:hover { background:var(--pill-2-hover); }
   .copy:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .copy.done { color:var(--ok); border-color:var(--ok); }
+  .copy.done { background:var(--pill); color:var(--pill-ink); }
 
-  /* ---------- таблица DNS ---------- */
-  .tablewrap { overflow-x:auto; margin:14px 0 16px; }
+  /* ---------- таблицы ---------- */
+  .tablewrap { overflow-x:auto; margin:14px 0 16px; background:var(--paper); border:1px solid var(--line); border-radius:16px; }
   table { border-collapse:collapse; width:100%; font-size:14.5px; }
-  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); }
-  th {
-    font-family:var(--mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase;
-    color:var(--ink-3); font-weight:600; border-bottom-color:var(--ink-3);
-  }
+  th, td { text-align:left; padding:12px 16px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-family:var(--mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3); font-weight:600; }
   td { font-family:var(--mono); color:var(--ink); font-variant-numeric:tabular-nums; }
   tr:last-child td { border-bottom:none; }
+  table.notif { min-width:560px; }
+  table.notif th:nth-child(1), table.notif td:nth-child(1) { width:26%; }
+  table.notif th:nth-child(2), table.notif td:nth-child(2) { width:26%; }
+  table.notif td:nth-child(2) { color:var(--ink); font-family:var(--sans); font-weight:500; }
+  table.notif td:nth-child(1), table.notif td:nth-child(3) { font-family:var(--sans); color:var(--ink-2); }
 
-  /* таблица уведомлений: не даём колонкам схлопнуться в столбик по слову */
-  table.notif { min-width: 560px; }
-  table.notif th:nth-child(1), table.notif td:nth-child(1) { width: 26%; }
-  table.notif th:nth-child(2), table.notif td:nth-child(2) { width: 26%; }
-  table.notif td:nth-child(2) { color: var(--ink); font-family: var(--sans); }
-  table.notif td:nth-child(1), table.notif td:nth-child(3) {
-    font-family: var(--sans); color: var(--ink-2);
-  }
-
-  /* ---------- провайдеры ---------- */
+  /* ---------- провайдеры и домены ---------- */
   .hosts { display:grid; gap:12px; margin:16px 0; }
-  .host {
-    border:1px solid var(--line); border-radius:10px; padding:14px 16px; background:var(--paper);
-  }
-  .host.pick { border-color:var(--accent-line); background:var(--accent-soft); }
+  .host { border:1px solid var(--line); border-radius:18px; padding:16px 18px; background:var(--paper); }
+  .host.pick { border-color:var(--accent-line); box-shadow:0 0 0 3px var(--accent-soft); }
   .host-top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
-  .host-name { font-family:var(--mono); font-size:15px; font-weight:600; color:var(--ink); }
+  .host-name { font-family:var(--sans); font-size:18px; font-weight:600; letter-spacing:-.01em; color:var(--ink); }
   .host-tag {
     font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
-    color:var(--accent); border:1px solid var(--accent-line); border-radius:20px; padding:2px 8px;
+    color:var(--pill-ink); background:var(--pill); border-radius:999px; padding:3px 10px;
   }
-  .host-price {
-    font-family:var(--mono); font-size:13.5px; color:var(--ink-2);
-    font-variant-numeric:tabular-nums; margin-left:auto;
-  }
-  .host ul { margin:8px 0 0; padding-left:18px; font-size:14.5px; }
-  .host li { margin-bottom:4px; }
+  .host:not(.pick) .host-tag { background:var(--card); color:var(--ink-2); }
+  .host-price { font-family:var(--mono); font-size:13.5px; color:var(--ink-2); font-variant-numeric:tabular-nums; margin-left:auto; }
+  .host ul { margin:10px 0 0; padding-left:18px; font-size:14.5px; }
+  .host li { margin-bottom:5px; }
   .pricenote { font-size:12.5px; color:var(--ink-3); margin:4px 0 0; }
-  @media (max-width:620px){
-    /* на узком экране цена переносится на свою строку - выравниваем по левому краю */
-    .host-price { margin-left:0; width:100%; }
-  }
+  @media (max-width:620px){ .host-price { margin-left:0; width:100%; } }
 
   /* ---------- врезки ---------- */
   .note {
-    border-radius:10px; padding:13px 16px; margin:14px 0 16px; font-size:14.5px;
-    border:1px solid var(--line); background:var(--sunken); color:var(--ink-2);
+    border-radius:16px; padding:14px 18px; margin:14px 0 16px; font-size:14.5px;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink-2);
   }
   .note.warn { background:var(--warn-soft); border-color:var(--warn-line); color:var(--warn); }
   .note.key { background:var(--accent-soft); border-color:var(--accent-line); color:var(--ink); }
-  .note.ok { background:var(--ok-soft); border-color:transparent; color:var(--ok); }
+  .note.ok { background:var(--ok-soft); border-color:var(--ok-line); color:var(--ok); }
   .note b { color:inherit; }
   .note .t {
     display:block; font-family:var(--mono); font-size:11px; letter-spacing:.12em;
-    text-transform:uppercase; margin-bottom:5px; opacity:.85;
+    text-transform:uppercase; margin-bottom:6px; opacity:.9;
   }
 
   /* подставляемые значения */
   .v { font-family:var(--mono); color:var(--accent); font-weight:600; word-break:break-all; }
+  code { font-family:var(--mono); font-size:.92em; }
   /* длинные команды прямо в тексте переносим, иначе на телефоне страница уезжает вбок */
   :not(pre) > code { overflow-wrap:anywhere; }
 
@@ -237,61 +301,96 @@
   .branch.on { display:block; }
 
   /* ---------- разбор ошибок ---------- */
-  .faq { margin-top:16px; border-top:1px solid var(--line); }
-  details {
-    border-bottom:1px solid var(--line);
-  }
+  .faq { margin-top:16px; background:var(--paper); border:1px solid var(--line); border-radius:20px; padding:0 20px; }
+  details { border-bottom:1px solid var(--line); }
+  details:last-child { border-bottom:0; }
   details summary {
-    cursor:pointer; padding:14px 2px; font-weight:600; font-size:15.5px;
-    list-style:none; display:flex; gap:12px; align-items:flex-start;
+    cursor:pointer; padding:16px 2px; font-weight:600; font-size:16px;
+    list-style:none; display:flex; gap:14px; align-items:flex-start;
   }
   details summary::-webkit-details-marker { display:none; }
   details summary::before {
-    content:"+"; font-family:var(--mono); color:var(--accent); font-weight:600;
-    flex:none; width:14px;
+    content:"+"; font-family:var(--mono); color:var(--pill-ink); background:var(--pill);
+    font-weight:600; flex:none; width:24px; height:24px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center; font-size:15px; line-height:1; margin-top:-1px;
   }
   details[open] summary::before { content:"–"; }
-  details summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
-  details .body { padding:0 0 16px 26px; color:var(--ink-2); font-size:15px; }
+  details summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
+  details .body { padding:0 0 18px 38px; color:var(--ink-2); font-size:15px; }
   details .body p { margin:0 0 10px; }
 
   h2.sec {
-    font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
-    color:var(--ink-3); font-weight:600; margin:56px 0 4px;
-    padding-bottom:10px; border-bottom:1px solid var(--line);
+    font-family:var(--sans); font-size:clamp(28px,4.4vw,40px); letter-spacing:-.03em; line-height:1.1;
+    color:var(--ink); font-weight:600; margin:80px 0 18px; text-wrap:balance;
   }
 
-  footer.end {
-    margin-top:56px; padding-top:20px; border-top:1px solid var(--line);
-    font-size:13.5px; color:var(--ink-3);
-  }
-  a { color:var(--accent); text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:1px; }
+  footer.end { margin-top:64px; padding-top:22px; border-top:1px solid var(--line); font-size:13.5px; color:var(--ink-3); }
+  a { color:var(--accent); text-decoration:underline; text-underline-offset:3px; text-decoration-thickness:1px; }
   a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
-  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } html { scroll-behavior:auto; } }
 </style>
 </head>
 <body>
 
-<div class="wrap">
+<nav class="nav" aria-label="Разделы">
+  <a class="brand" href="#top" aria-label="В начало">
+    <svg viewBox="0 0 34 14" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 7h24"/></g><g fill="currentColor"><circle cx="5" cy="7" r="4"/><circle cx="17" cy="7" r="4"/><circle cx="29" cy="7" r="4"/></g></svg>
+    n8n на своём сервере
+  </a>
+  <div class="nav-links">
+    <a href="#steps">Шаги</a>
+    <a href="#problems">Проблемы</a>
+    <a href="#bot">Уведомления</a>
+    <a href="#ai">ИИ-помощник</a>
+  </div>
+  <a class="btn sm" href="#steps">Начать</a>
+</nav>
+
+<div class="wrap" id="top">
 
   <header class="top">
-    <p class="eyebrow">Своя автоматизация · без подписок</p>
-    <h1>n8n на своём сервере за 10 минут</h1>
+    <p class="eyebrow label">Своя автоматизация · без подписок</p>
+    <h1>n8n на своём сервере за&nbsp;10&nbsp;минут</h1>
     <p class="lede">
       Одна команда — и на вашем сервере работает n8n с базой данных, шифрованием
-      и настоящим HTTPS. Скрипт всё спрашивает и делает сам. Эта страница нужна
-      для того, что делается вне терминала: домен, DNS и первый вход.
+      и настоящим HTTPS. Скрипт всё спрашивает и делает сам. Эта страница — про то,
+      что делается вне терминала: домен, сервер и первый вход.
     </p>
+    <div class="cta">
+      <a class="btn" href="#steps">Начать установку</a>
+      <a class="btn alt" href="#ai">Спросить ИИ</a>
+    </div>
+
+    <div class="flow-wrap" aria-hidden="true">
+      <div class="flow">
+        <div class="node"><div class="node-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>
+        </div><span class="node-name">Домен</span></div>
+        <div class="wire"></div>
+        <div class="node"><div class="node-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="6.5" rx="1.6"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.6"/><path d="M7 7.25h.01M7 16.75h.01M11 7.25h6M11 16.75h6"/></svg>
+        </div><span class="node-name">Сервер</span></div>
+        <div class="wire"></div>
+        <div class="node"><div class="node-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7 10l3 2.5L7 15M12.5 15H17"/></svg>
+        </div><span class="node-name">Одна команда</span></div>
+        <div class="wire"></div>
+        <div class="node"><div class="node-box done">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"/></svg>
+        </div><span class="node-name">n8n работает</span></div>
+      </div>
+    </div>
   </header>
 
-  <div class="note ok">
-    <span class="t">Застряли? Спросите ИИ</span>
-    Скачайте файл
-    <a href="https://github.com/generalovai/n8n-install/blob/main/AI-HELPER.md" target="_blank" rel="noopener">AI-HELPER.md</a>
-    (кнопка «Download raw file» справа вверху), загрузите его в чат с ChatGPT, Claude,
-    DeepSeek или другим ИИ и напишите: «Помоги мне установить n8n по этой инструкции».
-    В файле всё, что нужно ИИ, чтобы провести вас по шагам и разобрать ошибки.
-    Пароли, ключи и токены ИИ не отправляйте — они не нужны.
+  <div class="ai" id="ai">
+    <div class="ai-text">
+      <span class="label">Застряли? Спросите ИИ</span>
+      Скачайте файл <b>AI-HELPER.md</b> (на GitHub — кнопка «Download raw file» справа вверху),
+      загрузите его в чат с ChatGPT, Claude, DeepSeek или другим ИИ и напишите:
+      «Помоги мне установить n8n по этой инструкции». ИИ проведёт по шагам и разберёт ошибки.
+      Пароли, ключи и токены ему не отправляйте — они не нужны.
+    </div>
+    <a class="btn alt sm" href="https://github.com/generalovai/n8n-install/blob/main/AI-HELPER.md" target="_blank" rel="noopener">Открыть файл</a>
   </div>
 
   <section class="panel" aria-label="Ваши данные">
@@ -339,7 +438,7 @@
     <p class="mode" id="mode-line"></p>
   </section>
 
-  <div class="steps">
+  <div class="steps" id="steps">
 
     <!-- 1 -->
     <section class="step">
@@ -777,7 +876,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
 
   </div>
 
-  <h2 class="sec">Если что-то пошло не так</h2>
+  <h2 class="sec" id="problems">Если что-то пошло не так</h2>
   <div class="faq">
 
     <details>
@@ -881,7 +980,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
 
   </div>
 
-  <h2 class="sec">Какие сообщения будет присылать бот</h2>
+  <h2 class="sec" id="bot">Какие сообщения будет присылать бот</h2>
 
   <p style="color:var(--ink-2); margin:14px 0 4px;">
     Главное правило: <strong>молчит — значит всё хорошо</strong>. Ежедневных отчётов
