@@ -282,6 +282,16 @@
     </p>
   </header>
 
+  <div class="note ok">
+    <span class="t">Застряли? Спросите ИИ</span>
+    Скачайте файл
+    <a href="https://github.com/generalovai/n8n-install/blob/main/AI-HELPER.md" target="_blank" rel="noopener">AI-HELPER.md</a>
+    (кнопка «Download raw file» справа вверху), загрузите его в чат с ChatGPT, Claude,
+    DeepSeek или другим ИИ и напишите: «Помоги мне установить n8n по этой инструкции».
+    В файле всё, что нужно ИИ, чтобы провести вас по шагам и разобрать ошибки.
+    Пароли, ключи и токены ИИ не отправляйте — они не нужны.
+  </div>
+
   <section class="panel" aria-label="Ваши данные">
     <div class="panel-head">
       <h2>Ваши данные</h2>
@@ -291,7 +301,7 @@
       <div class="field">
         <label for="f-domain">Адрес для n8n</label>
         <input id="f-domain" type="text" spellcheck="false" autocapitalize="off"
-               placeholder="n8n.мойсайт.ru" value="">
+               placeholder="n8n.moysite.ru" value="">
         <span class="hint" id="h-domain">поддомен вашего домена</span>
       </div>
       <div class="field">
@@ -305,7 +315,7 @@
       <div class="choice">
         <span class="choice-q">Где берёте домен?</span>
         <div class="seg">
-          <label><input type="radio" name="reg" value="ru" checked><span>reg.ru или Beget</span></label>
+          <label><input type="radio" name="reg" value="ru" checked><span>reg.ru</span></label>
           <label><input type="radio" name="reg" value="cf"><span>Cloudflare</span></label>
         </div>
       </div>
@@ -319,8 +329,8 @@
       <div class="choice">
         <span class="choice-q">Где стоит сервер?</span>
         <div class="seg">
-          <label><input type="radio" name="srv" value="ru" checked><span>в России</span></label>
-          <label><input type="radio" name="srv" value="eu"><span>за границей</span></label>
+          <label><input type="radio" name="srv" value="ru"><span>в России</span></label>
+          <label><input type="radio" name="srv" value="eu" checked><span>за границей</span></label>
         </div>
       </div>
     </div>
@@ -341,80 +351,54 @@
         неподходящий момент: когда ставите дополнительные ноды или обрабатываете файл.
         Скрипт предупредит, если сервер слабее. Взять сразу 4 ГБ дешевле, чем переносить всё заново.
       </div>
-      <p>Мы пользуемся тремя провайдерами. Выбор упирается в один вопрос:
-         <strong>есть ли у вас карта зарубежного банка.</strong></p>
+      <p>Мы берём сервер на <strong>FirstVDS</strong>: оплата обычной российской картой
+         (МИР тоже), деньги списываются по дням — можно попробовать на день.
+         Тариф одинаковый — <strong>VDS Разгон</strong>, выбирается только страна.</p>
 
       <div class="hosts">
-        <div class="host">
-          <div class="host-top">
-            <span class="host-name">Beget</span>
-            <span class="host-tag">Россия</span>
-            <span class="host-price">2 ядра · 4 ГБ · 40 ГБ — 1149 ₽/мес</span>
-          </div>
-          <ul>
-            <li>Обычная российская карта, оплата посуточная — можно попробовать на день.</li>
-            <li><strong>Домен там же</strong>: зона <code>.ru</code> — 199 ₽ за первый год.</li>
-            <li>Сервер в России, поэтому <strong>нужен прокси</strong> для OpenAI и Telegram.
-                Связка «РФ-сервер плюс прокси» работает, если прокси <strong>пропускает Telegram</strong>:
-                некоторые продавцы его закрывают. Установщик это проверит.</li>
-            <li>Есть площадка в Казахстане — там прокси не нужен, но свободные места
-                бывают редко.</li>
-          </ul>
-        </div>
-
         <div class="host pick">
           <div class="host-top">
-            <span class="host-name">netcup</span>
-            <span class="host-tag">Германия · лучшее железо за деньги</span>
-            <span class="host-price">4 ядра · 8 ГБ · 256 ГБ — 1150 ₽/мес</span>
+            <span class="host-name">FirstVDS · Нидерланды</span>
+            <span class="host-tag">рекомендуем</span>
+            <span class="host-price">2 ядра · 4 ГБ · 60 ГБ NVMe — от 1099 ₽/мес</span>
           </div>
           <ul>
-            <li><strong>За те же деньги, что Beget</strong>, — вдвое больше ядер, вдвое больше
-                памяти и в шесть раз больше диска.</li>
-            <li>Сервер в Европе — <strong>прокси не нужен вообще</strong>.</li>
-            <li>Нужна <strong>карта зарубежного банка или PayPal</strong>, российские не проходят.</li>
-            <li>Регистрация строже: анкета на латинице, могут попросить документ с латинскими
-                буквами — подойдёт загранпаспорт. <strong>Сервер выдают вручную</strong>,
-                иногда приходится подождать.</li>
-            <li>Домен — любой, хоть <code>.ru</code> с reg.ru: регистратор домена и провайдер
-                сервера между собой не связаны.</li>
+            <li>Сервер в Европе — <strong>прокси не нужен вообще</strong>: OpenAI, Gemini,
+                Telegram и Docker работают напрямую.</li>
+            <li>Платить — российской картой, как за обычный хостинг.</li>
+            <li>Домен — любой, например <code>.ru</code> с reg.ru: регистратор домена
+                и провайдер сервера между собой не связаны.</li>
           </ul>
         </div>
 
         <div class="host">
           <div class="host-top">
-            <span class="host-name">justhost</span>
-            <span class="host-tag">заграница за рубли</span>
-            <span class="host-price">2 ядра · 4 ГБ · 50 ГБ — 1700 ₽/мес</span>
+            <span class="host-name">FirstVDS · Москва</span>
+            <span class="host-tag">если нужен сервер в России</span>
+            <span class="host-price">2 ядра · 4 ГБ · 60 ГБ — от 919 ₽/мес</span>
           </div>
           <ul>
-            <li>Главное преимущество: <strong>зарубежный сервер, а платить российской картой</strong>.
-                Выбираете европейскую площадку — и прокси не нужен.</li>
-            <li>Дороже остальных за то же железо. Это плата за то, чтобы не возиться
-                ни с зарубежной картой, ни с прокси.</li>
-            <li>При оплате сразу за год — скидка.</li>
-            <li>Домен придётся купить отдельно: reg.ru или Beget, около 200 ₽.</li>
+            <li>Чуть дешевле, но сервер в России, поэтому <strong>нужен прокси</strong>
+                для OpenAI и Telegram — это ещё расход и ещё одна настройка.</li>
+            <li>Прокси должен <strong>пропускать Telegram</strong>: напрямую с российских
+                серверов Telegram сейчас открывается через раз, а некоторые прокси его закрывают.
+                Установщик это проверит.</li>
+            <li>Берите, только если есть причина держать данные в России.</li>
           </ul>
         </div>
       </div>
 
-      <p class="pricenote">Цены — на август 2026 года, они меняются; смотрите актуальные на сайтах провайдеров.</p>
-
-      <div class="note ok">
-        <span class="t">Как выбрать за десять секунд</span>
-        Есть зарубежная карта и готовы подождать выдачи — <b>netcup</b>: за те же деньги
-        железо вдвое мощнее и прокси не нужен.
-        Только российская карта и не хочется возиться с прокси — <b>justhost</b>
-        с европейской площадкой, но дороже.
-        Хочется всё в одном месте, домен там же и прокси не пугает — <b>Beget</b>.
-      </div>
+      <p class="pricenote">Цены — на ноябрь 2026 года, они меняются; смотрите актуальные на
+         <a href="https://firstvds.ru" target="_blank" rel="noopener">firstvds.ru</a>.
+         Тарифы «VDS Старт» и «VDS Прогрев» не подойдут: в них 1 ядро и 1–2 ГБ памяти.</p>
 
       <div class="note">
         <span class="t">Что выбрать при заказе</span>
-        Провайдер попросит выбрать систему из списка. Нажмите просто
-        <b>Ubuntu 24.04</b> — без всяких приписок рядом. Если в списке есть строчки
-        вроде «Ubuntu + Docker» или «Ubuntu + ISPmanager», они не нужны: всё, что надо,
-        поставит сам скрипт. Если версии 24.04 нет, подойдёт любая новее — или 22.04.
+        Систему выберите просто <b>Ubuntu 24.04</b> — без приписок рядом.
+        <b>Панель управления не нужна</b>: ispmanager платная и займёт порты, нужные
+        для сайта n8n, — установка не пройдёт. «Рецепты» и дополнительное ПО тоже не берите:
+        всё, что надо, поставит сам скрипт. Остальное оставьте как есть.
+        После оплаты на почту придут <b>IP-адрес сервера и пароль root</b>.
       </div>
 
     </section>
@@ -487,7 +471,7 @@
       <div class="hosts">
         <div class="host">
           <div class="host-top">
-            <span class="host-name">reg.ru или Beget</span>
+            <span class="host-name">reg.ru</span>
             <span class="host-tag">российская карта</span>
             <span class="host-price">~200 ₽ в год</span>
           </div>
@@ -495,7 +479,7 @@
             <li>Зона <code>.ru</code> — около 200 ₽ за первый год, платить обычной картой.</li>
             <li>Одну запись в панели домена нужно будет создать руками — это пара полей,
                 и на следующем шаге показано, что именно вписать.</li>
-            <li>Подходит для любого сервера, в том числе для netcup в Германии.</li>
+            <li>Подходит для любого сервера, в том числе в Нидерландах.</li>
           </ul>
         </div>
 
@@ -516,7 +500,7 @@
       </div>
 
       <p>Домен покупается целиком, а n8n будет жить на его поддомене — например
-         <span class="v" data-v="domain">n8n.мойсайт.ru</span>.</p>
+         <span class="v" data-v="domain">n8n.moysite.ru</span>.</p>
 
       <div class="note ok">
         <span class="t">Домен и сервер между собой не связаны</span>
@@ -526,7 +510,7 @@
       <div class="note warn">
         <span class="t">Только латиница</span>
         Домены в зоне <b>.рф</b> и другие кириллические брать не стоит: на такие адреса
-        бесплатный сертификат выдаётся не всегда. Берите обычный, например <b>мойсайт.ru</b>.
+        бесплатный сертификат выдаётся не всегда. Берите обычный, например <b>moysite.ru</b>.
       </div>
     </section>
 
@@ -535,10 +519,10 @@
       <div class="num">4</div>
       <h3>Направьте домен на сервер</h3>
 
-      <!-- ветка: домен на reg.ru / Beget -->
+      <!-- ветка: домен на reg.ru -->
       <div class="branch on" data-branch="plain">
         <p>Зайдите в панель управления доменом: на reg.ru это раздел
-           <strong>«Управление зоной DNS»</strong>, на Beget — <strong>«Домены»</strong>.
+           <strong>«Управление зоной DNS»</strong>.
            Создайте там одну запись:</p>
         <div class="tablewrap">
           <table>
@@ -578,7 +562,7 @@
         <div class="note ok">
           <span class="t">Что дальше сделает скрипт</span>
           Спросит этот ключ, сам найдёт домен, сам создаст запись
-          <b><span class="v" data-v="domain">n8n.мойсайт.ru</span></b> → <b><span class="v" data-v="ip">203.0.113.10</span></b>
+          <b><span class="v" data-v="domain">n8n.moysite.ru</span></b> → <b><span class="v" data-v="ip">203.0.113.10</span></b>
           и получит сертификат. В панель Cloudflare заходить больше не придётся.
         </div>
         <div class="note warn">
@@ -594,7 +578,7 @@
       <div class="num">5</div>
       <h3>Приготовьте прокси</h3>
       <p>Прокси нужен, только если сервер стоит в России — например, вы взяли
-         <strong>Beget</strong>. Без него не скачаются образы и ноды не смогут ходить
+         <strong>FirstVDS в Москве</strong>. Без него не скачаются образы и ноды не смогут ходить
          в OpenAI, Telegram и другие зарубежные сервисы.</p>
       <p>Если сервер за границей — прокси не нужен: отметьте это наверху,
          и шаг пропадёт.</p>
@@ -698,8 +682,7 @@ socks5://логин:пароль@адрес:порт</code></pre>
         <br><br>
         Сертификат выдаёт <b>Let's Encrypt</b> — тот же, что у большинства сайтов
         в интернете. Он настоящий, бесплатный и продлевается сам каждые два месяца.
-        Отдельно покупать ничего не нужно, и на Beget его включать тоже не надо:
-        там бесплатный сертификат только для сайтов на их хостинге, а у вас свой сервер.
+        Отдельно покупать ничего не нужно и в панели хостинга ничего включать не надо.
       </div>
       <div class="note">
         <span class="t">Если предупреждение не ушло через час</span>
@@ -762,7 +745,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
         <ol>
           <li>Зарегистрируйтесь на <a href="https://uptimerobot.com" target="_blank" rel="noopener">uptimerobot.com</a> — бесплатно, до 50 проверок.</li>
           <li>Нажмите <b>Add New Monitor</b>, тип — <b>HTTP(s)</b>.</li>
-          <li>Имя — любое, например n8n. Адрес — <code>https://<span class="v" data-v="domain">n8n.мойсайт.ru</span>/healthz</code></li>
+          <li>Имя — любое, например n8n. Адрес — <code>https://<span class="v" data-v="domain">n8n.moysite.ru</span>/healthz</code></li>
           <li>Интервал — <b>5 минут</b> (это максимум на бесплатном тарифе), отметьте свою почту в списке оповещений.</li>
           <li><b>Create Monitor</b>.</li>
         </ol>
@@ -942,6 +925,13 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
               Сайт работает, данные целы, автообновление встало на паузу</td>
         </tr>
         <tr>
+          <td>один раз, когда выйдет новая большая версия n8n</td>
+          <td>🆕 Вышел n8n 3</td>
+          <td>сам сервер её не ставит: в ней убраны старые ноды, часть воркфлоу может
+              перестать работать. Обновитесь, когда будете готовы, командой
+              <code>/opt/n8n/update.sh</code> — она спросит подтверждение и сделает копию</td>
+        </tr>
+        <tr>
           <td>ночью в 02:00, только при сбое</td>
           <td>🔴 Не удалось сделать копию</td>
           <td>резервная копия не создалась — стоит зайти и посмотреть почему</td>
@@ -993,7 +983,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
       hD = document.getElementById("h-domain"),
       hI = document.getElementById("h-ip");
 
-  var PH_DOMAIN = "n8n.мойсайт.ru", PH_IP = "203.0.113.10";
+  var PH_DOMAIN = "n8n.moysite.ru", PH_IP = "203.0.113.10";
 
   function pick(name) {
     var el = document.querySelector('input[name="' + name + '"]:checked');
@@ -1028,7 +1018,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
     var dOk = validDomain(dRaw), iOk = validIp(iRaw);
     var d = dOk ? dRaw : PH_DOMAIN, ip = iOk ? iRaw : PH_IP;
 
-    hD.textContent = dRaw && !dOk ? "похоже на опечатку — нужен вид n8n.мойсайт.ru" : "поддомен вашего домена";
+    hD.textContent = dRaw && !dOk ? "похоже на опечатку — нужен вид n8n.moysite.ru" : "поддомен вашего домена";
     hD.className = "hint" + (dRaw && !dOk ? " bad" : "");
     hI.textContent = iRaw && !iOk ? "IP состоит из четырёх чисел через точку" : "выдаёт хостинг при создании сервера";
     hI.className = "hint" + (iRaw && !iOk ? " bad" : "");
@@ -1076,7 +1066,7 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
   }
   setPick("os", load("os") || guessOS());
   setPick("reg", load("reg") || "ru");
-  setPick("srv", load("srv") || "ru");
+  setPick("srv", load("srv") || "eu");
   [dEl, iEl].forEach(function (el) { el.addEventListener("input", render); });
   document.querySelectorAll('.seg input').forEach(function (el) {
     el.addEventListener("change", render);
