@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Русская раскладка в адресе: «nеw8nеw.ru» с русской «е» выглядит как
+# Русская раскладка в адресе: «еxamplе.ru» с русской «е» выглядит как
 # настоящий, но такого адреса нет. У подписчика из-за этого скрипт сутки
 # «не видел» правильную A-запись. Проверяем распознавание в двух локалях.
 set -Eeuo pipefail
@@ -15,10 +15,10 @@ rf=$(printf '\xd1\x80\xd1\x84'); ru=$(printf '\xd1\x80\xd1\x83')
 site=$(printf '\xd1\x81\xd0\xb0\xd0\xb9\xd1\x82')
 t() { if layout_mixup "$1"; then r=ошибка; else r=норм; fi
       [ "$r" = "$2" ] || { echo "  ПРОВАЛ [$LC_ALL] $1 -> $r, ждали $2"; F=1; }; }
-t "n8n.new8new.ru" норм;       t "mysite.ru" норм;     t "my-site2.ru" норм
+t "n8n.example.ru" норм;       t "mysite.ru" норм;     t "my-site2.ru" норм
 t "123.ru" норм;               t "n8n.${site}.${rf}" норм
-t "n8n.n${e}w8n${e}w.ru" ошибка; t "n8n.n${o}w8n${o}w.ru" ошибка
-t "n8n.new8new.r${e}" ошибка;  t "${site}.ru" ошибка; t "site.${ru}" ошибка
+t "n8n.${e}xampl${e}.ru" ошибка; t "n8n.${o}x${o}.ru" ошибка
+t "n8n.example.r${e}" ошибка;  t "${site}.ru" ошибка; t "site.${ru}" ошибка
 exit $F
 T
 for loc in C C.UTF-8; do

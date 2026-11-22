@@ -68,14 +68,14 @@ unset CERT_WAIT
 # --- русская раскладка в адресе и несуществующий домен ------------------------
 E=$(printf '\xd0\xb5')
 rm -rf /opt/n8n
-             run "И: адрес с русской «е», потом правильный"     "n8n.n${E}w8n${E}w.ru\nn8n.new8new.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n"
+             run "И: адрес с русской «е», потом правильный"     "n8n.${E}xampl${E}.ru\nn8n.example.ru\nn\nn\nadmin@m.ru\nEurope/Moscow\ny\nn\n"
              check "И: объяснил про раскладку"                 grep -q 'русской раскладке' /tmp/r.log
-             check "И: в .env правильный адрес"                grep -q '^N8N_FQDN=n8n.new8new.ru$' /opt/n8n/.env
-sed -i "s/^N8N_FQDN=.*/N8N_FQDN=n8n.n${E}w8n${E}w.ru/" /opt/n8n/.env
-             run "И2: сохранённый адрес с русской «е»"           'n8n.new8new.ru\nn\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
+             check "И: в .env правильный адрес"                grep -q '^N8N_FQDN=n8n.example.ru$' /opt/n8n/.env
+sed -i "s/^N8N_FQDN=.*/N8N_FQDN=n8n.${E}xampl${E}.ru/" /opt/n8n/.env
+             run "И2: сохранённый адрес с русской «е»"           'n8n.example.ru\nn\ny\nadmin@m.ru\nEurope/Moscow\nn\n'
              check "И2: не предложил оставить его"             sh -c '! grep -q "Оставить этот же адрес" /tmp/r.log'
              check "И2: объяснил про раскладку"                grep -q 'русской раскладке' /tmp/r.log
-             check "И2: в .env правильный адрес"               grep -q '^N8N_FQDN=n8n.new8new.ru$' /opt/n8n/.env
+             check "И2: в .env правильный адрес"               grep -q '^N8N_FQDN=n8n.example.ru$' /opt/n8n/.env
 RF=$(printf 'n8n.\xd0\xbc\xd0\xbe\xd0\xb9\xd1\x81\xd0\xb0\xd0\xb9\xd1\x82.\xd1\x80\xd1\x84')
 rm -rf /opt/n8n
              run "И3: домен .рф целиком кириллицей"              "${RF}\ny\nn\nn\nn\ny\nadmin@m.ru\nEurope/Moscow\ny\nn\n"

@@ -54,7 +54,7 @@ need 'remove-orphans'                 'уборка лишних контейн�
 V="$(grep -o '^INST_VER="[^"]*"' "$I" | cut -d'"' -f2)"
 A="$ROOT/AI-HELPER.md"
 if [ ! -f "$A" ]; then echo "  ПРОПАЛО: AI-HELPER.md"; fail=1
-elif ! grep -q "| Версия установщика | $V |" "$A" || ! grep -q "новее, чем $V " "$A"; then
+elif ! grep -q "| Версия установщика (скрипта, не n8n) | $V |" "$A" || ! grep -q "новее, чем $V " "$A"; then
   echo "  УСТАРЕЛО: в AI-HELPER.md не версия $V - обновите шапку и раздел 0"; fail=1
 fi
 
