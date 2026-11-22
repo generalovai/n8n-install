@@ -229,6 +229,8 @@
 
   /* подставляемые значения */
   .v { font-family:var(--mono); color:var(--accent); font-weight:600; word-break:break-all; }
+  /* длинные команды прямо в тексте переносим, иначе на телефоне страница уезжает вбок */
+  :not(pre) > code { overflow-wrap:anywhere; }
 
   /* ветки */
   .branch { display:none; }
@@ -342,6 +344,66 @@
     <!-- 1 -->
     <section class="step">
       <div class="num">1</div>
+      <h3>Купите домен</h3>
+      <p>Без домена не будет HTTPS, а без HTTPS n8n не сможет нормально работать
+         с большинством сервисов. Начните с него: новый домен включается не сразу,
+         и пока вы арендуете сервер, он как раз успеет заработать.
+         Есть два варианта, и от вашего выбора зависят следующие шаги — отметьте его в панели выше.</p>
+
+      <div class="hosts">
+        <div class="host">
+          <div class="host-top">
+            <span class="host-name">reg.ru</span>
+            <span class="host-tag">российская карта</span>
+            <span class="host-price">~200 ₽ в год</span>
+          </div>
+          <ul>
+            <li>Зона <code>.ru</code> — около 200 ₽ за первый год, платить обычной картой.</li>
+            <li>Одну запись в панели домена нужно будет создать руками — это пара полей,
+                и на шаге 3 показано, что именно вписать.</li>
+            <li>Подходит для любого сервера, в том числе в Нидерландах.</li>
+          </ul>
+        </div>
+
+        <div class="host">
+          <div class="host-top">
+            <span class="host-name">Cloudflare</span>
+            <span class="host-tag">зарубежная карта</span>
+            <span class="host-price">от ~4–5 $ в год</span>
+          </div>
+          <ul>
+            <li>Есть очень дешёвые зоны: <code>.win</code>, <code>.bid</code>,
+                <code>.stream</code>, <code>.download</code> — около 4 $ за первый год
+                и около 5 $ за продление, <code>.fyi</code> — около 5 $. Для n8n зона не важна.
+                Зоны <code>.ru</code> там нет.</li>
+            <li><strong>Смотрите цену продления.</strong> Например, <code>.online</code>,
+                <code>.site</code>, <code>.fun</code>, <code>.store</code> стоят ~5 $ только
+                первый год, а со второго — 25–42 $ в год.</li>
+            <li><strong>Ничего создавать руками не нужно</strong> — скрипт пропишет всё сам.
+                От вас потребуется только скопировать один ключ из Cloudflare.</li>
+            <li>Этот способ надёжнее: он срабатывает даже там, где обычный почему-то не проходит.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>Домен покупается целиком, а n8n будет жить на его поддомене — например
+         <span class="v" data-v="domain">n8n.moysite.ru</span>.</p>
+
+      <div class="note ok">
+        <span class="t">Домен и сервер между собой не связаны</span>
+        Можно взять сервер в Нидерландах, а домен <b>.ru</b> на reg.ru — это обычная рабочая
+        связка. Провайдер сервера не диктует, где покупать домен.
+      </div>
+      <div class="note warn">
+        <span class="t">Только латиница</span>
+        Домены в зоне <b>.рф</b> и другие кириллические брать не стоит: на такие адреса
+        бесплатный сертификат выдаётся не всегда. Берите обычный, например <b>moysite.ru</b>.
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="step">
+      <div class="num">2</div>
       <h3>Арендуйте сервер</h3>
       <p>Нужен VPS с <strong>Ubuntu 24.04</strong>, <strong>2 ядрами и 4 ГБ
          оперативной памяти</strong>. Диска хватит 20–40 ГБ.</p>
@@ -403,120 +465,9 @@
 
     </section>
 
-    <!-- 2 -->
-    <section class="step">
-      <div class="num">2</div>
-      <h3>Подключитесь к серверу по SSH</h3>
-
-      <!-- Windows -->
-      <div class="branch on" data-branch="win">
-        <p>Понадобится приложение <strong>«Терминал»</strong> (Windows Terminal) — бесплатное,
-           от самой Microsoft.</p>
-        <ul>
-          <li><strong>Windows 11:</strong> оно уже стоит. Нажмите Пуск и наберите «Терминал».</li>
-          <li><strong>Windows 10:</strong> откройте Microsoft Store, найдите
-              <a href="https://apps.microsoft.com/detail/9n0dx20hk701" target="_blank" rel="noopener">Windows Terminal</a>
-              и нажмите «Получить».</li>
-        </ul>
-        <div class="note warn">
-          <span class="t">Старую «Командную строку» (cmd.exe) не берите</span>
-          Она не умеет показывать русские буквы из Linux: вместо текста будут значки
-          вроде <code>“бв ­®ўйЁЄ</code>, и вы не поймёте, что спрашивает установщик.
-          Ставить ничего не нужно, если у вас Windows 11 — «Терминал» там уже есть.
-        </div>
-        <p>Откройте Терминал и введите команду:</p>
-        <div class="cmd">
-          <pre><code id="c-ssh">ssh root@ВАШ_IP</code></pre>
-          <button class="copy" data-for="c-ssh">Копировать</button>
-        </div>
-        <p><strong>Вставить команду</strong> в Терминал можно обычным <code>Ctrl+V</code>
-           или правой кнопкой мыши.</p>
-        <div class="note">
-          <span class="t">Пишет «ssh не является внутренней или внешней командой»</span>
-          Значит не включён клиент SSH. Откройте
-          <b>Параметры → Приложения → Дополнительные компоненты → Добавить компонент</b>,
-          найдите <b>Клиент OpenSSH</b> и установите. Потом закройте и откройте Терминал заново.
-        </div>
-      </div>
-
-      <!-- Mac и Linux -->
-      <div class="branch" data-branch="mac">
-        <p>Откройте приложение <strong>«Терминал»</strong> — оно уже есть в системе.
-           На Маке найти проще всего через поиск: <code>Cmd+Пробел</code>, наберите
-           «Терминал».</p>
-        <p>Введите команду:</p>
-        <div class="cmd">
-          <pre><code id="c-ssh-mac">ssh root@ВАШ_IP</code></pre>
-          <button class="copy" data-for="c-ssh-mac">Копировать</button>
-        </div>
-        <p><strong>Вставить команду</strong> можно обычным <code>Cmd+V</code>.</p>
-      </div>
-
-      <p>Первый раз он спросит <code>Are you sure you want to continue connecting</code> —
-         напишите <strong>yes</strong> целиком и нажмите Enter. Одной буквы <code>y</code>
-         недостаточно: ssh её не примет и переспросит.</p>
-      <p>Затем введите пароль root — его присылает хостинг. При вводе пароля
-         <strong>на экране ничего не появляется</strong>: ни звёздочек, ни точек.
-         Это нормально, наберите вслепую и нажмите Enter.</p>
-    </section>
-
     <!-- 3 -->
     <section class="step">
       <div class="num">3</div>
-      <h3>Купите домен</h3>
-      <p>Без домена не будет HTTPS, а без HTTPS n8n не сможет нормально работать
-         с большинством сервисов. Есть два варианта, и от вашего выбора зависят
-         следующие шаги — отметьте его в панели выше.</p>
-
-      <div class="hosts">
-        <div class="host">
-          <div class="host-top">
-            <span class="host-name">reg.ru</span>
-            <span class="host-tag">российская карта</span>
-            <span class="host-price">~200 ₽ в год</span>
-          </div>
-          <ul>
-            <li>Зона <code>.ru</code> — около 200 ₽ за первый год, платить обычной картой.</li>
-            <li>Одну запись в панели домена нужно будет создать руками — это пара полей,
-                и на следующем шаге показано, что именно вписать.</li>
-            <li>Подходит для любого сервера, в том числе в Нидерландах.</li>
-          </ul>
-        </div>
-
-        <div class="host">
-          <div class="host-top">
-            <span class="host-name">Cloudflare</span>
-            <span class="host-tag">зарубежная карта</span>
-            <span class="host-price">~10 $ в год</span>
-          </div>
-          <ul>
-            <li>Зона <code>.com</code> около 10 $ в год, по себестоимости без наценки.
-                Зоны <code>.ru</code> там нет.</li>
-            <li><strong>Ничего создавать руками не нужно</strong> — скрипт пропишет всё сам.
-                От вас потребуется только скопировать один ключ из Cloudflare.</li>
-            <li>Этот способ надёжнее: он срабатывает даже там, где обычный почему-то не проходит.</li>
-          </ul>
-        </div>
-      </div>
-
-      <p>Домен покупается целиком, а n8n будет жить на его поддомене — например
-         <span class="v" data-v="domain">n8n.moysite.ru</span>.</p>
-
-      <div class="note ok">
-        <span class="t">Домен и сервер между собой не связаны</span>
-        Можно взять сервер в Германии, а домен <b>.ru</b> на reg.ru — это обычная рабочая
-        связка. Провайдер сервера не диктует, где покупать домен.
-      </div>
-      <div class="note warn">
-        <span class="t">Только латиница</span>
-        Домены в зоне <b>.рф</b> и другие кириллические брать не стоит: на такие адреса
-        бесплатный сертификат выдаётся не всегда. Берите обычный, например <b>moysite.ru</b>.
-      </div>
-    </section>
-
-    <!-- 4 -->
-    <section class="step">
-      <div class="num">4</div>
       <h3>Направьте домен на сервер</h3>
 
       <!-- ветка: домен на reg.ru -->
@@ -571,6 +522,63 @@
           Cloudflare не пропустит файлы больше 100 МБ, а для n8n это часто мешает.
         </div>
       </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="step">
+      <div class="num">4</div>
+      <h3>Подключитесь к серверу по SSH</h3>
+
+      <!-- Windows -->
+      <div class="branch on" data-branch="win">
+        <p>Понадобится приложение <strong>«Терминал»</strong> (Windows Terminal) — бесплатное,
+           от самой Microsoft.</p>
+        <ul>
+          <li><strong>Windows 11:</strong> оно уже стоит. Нажмите Пуск и наберите «Терминал».</li>
+          <li><strong>Windows 10:</strong> откройте Microsoft Store, найдите
+              <a href="https://apps.microsoft.com/detail/9n0dx20hk701" target="_blank" rel="noopener">Windows Terminal</a>
+              и нажмите «Получить».</li>
+        </ul>
+        <div class="note warn">
+          <span class="t">Старую «Командную строку» (cmd.exe) не берите</span>
+          Она не умеет показывать русские буквы из Linux: вместо текста будут значки
+          вроде <code>“бв ­®ўйЁЄ</code>, и вы не поймёте, что спрашивает установщик.
+          Ставить ничего не нужно, если у вас Windows 11 — «Терминал» там уже есть.
+        </div>
+        <p>Откройте Терминал и введите команду:</p>
+        <div class="cmd">
+          <pre><code id="c-ssh">ssh root@ВАШ_IP</code></pre>
+          <button class="copy" data-for="c-ssh">Копировать</button>
+        </div>
+        <p><strong>Вставить команду</strong> в Терминал можно обычным <code>Ctrl+V</code>
+           или правой кнопкой мыши.</p>
+        <div class="note">
+          <span class="t">Пишет «ssh не является внутренней или внешней командой»</span>
+          Значит не включён клиент SSH. Откройте
+          <b>Параметры → Приложения → Дополнительные компоненты → Добавить компонент</b>,
+          найдите <b>Клиент OpenSSH</b> и установите. Потом закройте и откройте Терминал заново.
+        </div>
+      </div>
+
+      <!-- Mac и Linux -->
+      <div class="branch" data-branch="mac">
+        <p>Откройте приложение <strong>«Терминал»</strong> — оно уже есть в системе.
+           На Маке найти проще всего через поиск: <code>Cmd+Пробел</code>, наберите
+           «Терминал».</p>
+        <p>Введите команду:</p>
+        <div class="cmd">
+          <pre><code id="c-ssh-mac">ssh root@ВАШ_IP</code></pre>
+          <button class="copy" data-for="c-ssh-mac">Копировать</button>
+        </div>
+        <p><strong>Вставить команду</strong> можно обычным <code>Cmd+V</code>.</p>
+      </div>
+
+      <p>Первый раз он спросит <code>Are you sure you want to continue connecting</code> —
+         напишите <strong>yes</strong> целиком и нажмите Enter. Одной буквы <code>y</code>
+         недостаточно: ssh её не примет и переспросит.</p>
+      <p>Затем введите пароль root — его присылает хостинг. При вводе пароля
+         <strong>на экране ничего не появляется</strong>: ни звёздочек, ни точек.
+         Это нормально, наберите вслепую и нажмите Enter.</p>
     </section>
 
     <!-- 5 прокси -->
@@ -815,10 +823,10 @@ cd /opt/n8n &amp;&amp; docker compose logs -f n8n
            написано, что сделать. Чаще всего бывает одно из двух:</p>
         <ul>
           <li><b>Прокси не пускает к Telegram.</b> Попросите у продавца прокси,
-              который пропускает Telegram, и запустите установщик ещё раз: на шаге 3
+              который пропускает Telegram, и запустите установщик ещё раз: на его шаге 3
               ответьте <code>n</code> на «Оставить его?» и введите новый адрес.</li>
           <li><b>Прокси не указан</b>, а сервер в России. Запустите установщик ещё раз
-              и на шаге 3 укажите прокси.</li>
+              и на его шаге 3 укажите прокси.</li>
         </ul>
         <p>Воркфлоу и доступы при повторном запуске не пропадают. Если не получается —
            пришлите отчёт целиком: паролей в нём нет.</p>
